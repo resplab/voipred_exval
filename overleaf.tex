@@ -1,0 +1,199 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{lmodern}
+\usepackage{ifxetex,ifluatex}
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\hypersetup{
+  pdftitle={overleaf},
+  pdfauthor={Mohsen Sadatsafavi},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+\urlstyle{same} % disable monospaced font for URLs
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\ifluatex
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+
+\title{overleaf}
+\author{Mohsen Sadatsafavi}
+\date{2/20/2022}
+
+\begin{document}
+\maketitle
+
+\section{Notations and definitions}
+
+Both EVPIs are a property of the joint distribution \(P(X,Y)\), where
+\(X\) is the vector of covariates and \(Y\) is the binary outcome. We
+decompose this joint probability to \(P(X)P(Y|X)\). Let \(\eta\) be the
+set of hyper-parameters that governs the distribution of \(P(X)\), and
+\(\theta\) the set of hyper-parameters that governs the conditional
+probability of \(P(Y|X)\) (regression coefficients). Let \(\pi_\eta\)
+and \(p_{\eta,\theta}\) be, respectively, a random draw from the joint
+distribution of predicted and correct risks under given values of
+hyper-parameters. The subscripts emphasize that the distribution of
+predicted risks is only a function of \(\eta\) while the distribution of
+correct risks is affected by both \(\eta\) and \(\theta\).
+
+The net benefit (NB) of treating no one is set to 0 by definition. The
+NB of the model is
+
+\begin{center}
+$NB_{model}(\eta,\theta)=\text{E}\{{I(\pi_\eta>z)\{p_{\eta,\theta}-(1-p_{\eta,\theta})z/(1-z)}\}\},$
+\end{center}
+
+where the expectation is over the joint distribution of predicted and
+correct risks. Similarly, the NB of treating all is
+
+\begin{center}
+$NB_{all}(\eta,\theta)=\text{E}{\{p_{\eta,\theta}-(1-p_{\eta,\theta})z/(1-z)}\}.$
+\end{center}
+
+Finally, the NB of using the correct risks is
+
+\begin{center}
+$NB_{max}(\eta,\theta)=\text{E}\{{I(p_{\eta,\theta}>z)\{p_{\eta,\theta}-(1-p_{\eta,\theta})z/(1-z)}\}\}.$
+\end{center}
+
+Based on the above, we can define validation and development EVPIs as:
+
+\begin{center}
+$EVPI_V = \text{E}_{\eta,\theta}\{\max\{0, NB_{model}(\eta,\theta), NB_{all}(\eta,\theta)\}\} - \max\{0,\text{E}_{\eta,\theta}NB_{model}(\eta,\theta),\text{E}_{\eta,\theta}NB_{all}(\eta,\theta) \}$,
+\end{center}
+
+and
+
+\begin{center}
+$EVPI_D = \text{E}_{\eta,\theta}\{NB_{max}(\eta,\theta)\} - \max\{0,\text{E}_{\eta,\theta}NB_{model}(\eta,\theta),\text{E}_{\eta,\theta}NB_{all}(\eta,\theta) \}.$ 
+\end{center}
+
+\textbf{Remark:} The second term on RHS is the same for both EVPIs and
+is the expected NB of the best decision we can make with current
+information. It is readily clear, based on the first term on RHS, that
+\(EVPI_D \geq EVPI_V\).
+
+\section{A general framework for EVPI calculation}
+
+Given the independence of two sets of hyper-parameters, we can write the
+\(\text{E}_{\eta,\theta}NB_{model}\) as
+
+\begin{center}
+$\text{E}_{\eta,\theta}NB_{model}(\eta,\theta)=\text{E}_\theta\text{E}_\eta\text{E}\{{I(\pi_\eta>z)\{p_{\eta,\theta}-(1-p_{\eta,\theta})z/(1-z)}\}\}$.\end{center}
+
+As long as we do not have any prior information on \(\eta\) and all we
+learn about \(P(X)\) is from the observed \(X\)s, the two inner
+expectation can be replaced by the sample mean:
+
+\begin{center}
+$
+\text{E}_{\eta,\theta}NB_{model}(\eta,\theta)=\text{E}_\theta\sum_{i=1}^{n}{I(\pi_i>z)\{p_{\theta i}-(1-p_{\theta i})z/(1-z)}\}/n,$ 
+\end{center}
+
+where \(\pi_i\) and \(p_{\theta,i}\) are, respectively, the predicted
+and correct risks for the ith person in the sample, and \(n\) is the
+sample size. Similar derivations can be followed for \(NB_{all}\) and
+\(NB_{max}\). This is, for example, quite obvious for bootstrapping for
+quantifying uncertainty around \(P(X)\). This justifies our previous
+derivations for development EVPI.
+
+Given the above, both terms involved in \(EVPI_D\) and the second term
+on RHS of \(EVPI_V\) generally do not require modeling \(P(X)\). This is
+not the case, however, for the first term on RHS of \(EVPI_V\).
+Therefore, for calculation validation \(EVPI\), modeling \(P(X)\) will
+become necessary. We generally suggest the following three lines:
+
+\textbf{A: Bootstrap} A Bayesian bootstrap can be used for joint
+sampling of \(P(X)\) and \(P(Y|X)\). This approach is equal to
+considering \(\eta\) to be a vector of weights assigned to realized
+values o \(X\): \(P(\eta)\sim Dirchlet(1,1,...,1)\). For \(P(Y|X)\),
+this approach assumes a probability mass of 1 at the observed value of
+\(Y\) given the corresponding \(X\). Quick calculations show that for
+development EVPI, this will result in \(NB_{max}=\hat{\text{E}}(Y)\),
+the observed outcome prevalence. This is the EVPI of the model that can
+perfectly predict the outcome for each person. That by knowing
+covariates \(X\) we can perfectly predict the response is an untenable
+assumption that shows the insufficiency of the bootstrap approach. For
+validation EVPI, this also results in a noisy estimates that are quite
+variable over z and are difficult to interpret. To us, a proper modeling
+of \(P(Y|X)\) is warranted for realistic, interpretable EVPI
+calculations.
+
+\textbf{B: Univariate modeling:} Because in the context of external
+validation, the information in X is condensed in predicted risks, one
+can replace X with scalar \(\pi\) This will turn modeling \(P(X)\) and
+\(P(Y|X)\) as univariate problem. For example, \(P(X)\) can be modeled
+via a kernel function, while \(P(Y|X)\) as a univariate regression that
+recovers the correct calibration function (mapping predicted risks to
+correct risks). Of note, \(EVPI_D\) in this approach is the expected
+value of perfect recalibration of the existing model (and not
+development), which is a relevant figure of merit if we are considering
+recalibrating a model but not necessarily re-estimating regression
+coefficients.
+
+\textbf{C: Full modeling:} This approach involves modeling of
+\(P(Y|X)\). This will enable consistent quantification of validation and
+development EVPIs in a unified framework.
+
+\begin{enumerate}
+\item Randomly draw from $P(\theta)$. This can done by approximating the likelihood $P(Y|\theta)$ as the posterior distribution of $\theta$ (under prior $P(\theta) \propto 1$), or via (Bayesian) bootstrapping of the data and estimating $\theta$ in this sample.
+\item Calculate $NB_{model}$,$NB_{all}$, and $NB_{max}$ in the original sample using $\theta$s from \#1 and record them in memory.  
+\item Perform a (Bayesian) bootstrap of the data. This will be a draw from $P(\eta)$.
+\item Calculate $NB_{model}$ and $NB_{all}$ in the sample obtained in \#3 using $\theta$s from \#1. Pick the maximum of 0, $NB_{model}$ and $NB_{all}$ and store it in memory.  
+\item Repeat the above many time
+\item Calculate $max\{0, mean(NB_{model}), mean(NB_{all})\}$ from \#2. This is the second term on RHS of EVPIs.
+\item Calculate $mean(NB_{max})$ from \#2. This is the first term on RHS of $EVPI_D$.
+\item Average $max\{0, NB_{model}, NB_{all}\}$ from \#4. This is the first term on RHS of $EVPI_V$.
+\end{enumerate}
+
+\textbackslash end\{document\}
+
+\end{document}

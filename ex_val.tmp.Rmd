@@ -1,0 +1,240 @@
+---
+title: "Second attempt (From scratch)"
+author: "Mohsen Sadatsafavi"
+date: "2022.03.06"
+output: html_document
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+settings <- list(
+  dev_sample_size = Inf,
+  vpreal_sample_size = 1000,
+  n_sim_bs = 1000,
+  n_sim_un = 100,
+  n_sim_mb ='dsfdsfdsf 1000,
+  Bayesian_bootstrap =F,
+  zs=c(0.,jdsahdkjshdfkjds
+       
+
+```
+
+
+
+```{r}
+  library(voipred)
+  library(rms)
+
+  set.seed(1)
+
+  data(gusto)
+  gusto$kill <- (as.numeric(gusto$Killip)>1)*1
+  gusto$Y <- gusto$day30
+  data_us <- gusto[gusto$regl %in% c(1, 7, 9, 10, 11, 12, 14, 15),]
+  data_other <- gusto[!gusto$regl %in% c(1, 7, 9, 10, 11, 12, 14, 15),]
+  
+  if(is.infinite(settings$dev_sample_size))
+  {
+    dev_data <- data_other
+  }else
+  {
+    dev_data <- data_other[sample(1:(dim(data_other)[1]),settings$dev_sample_size,F),]
+  }
+  
+  if(is.infinite(settings$val_sample_size))
+  {
+    val_data <- data_us
+  }else
+  {
+    val_data <- data_us[sample(1:(dim(data_us)[1]),settings$val_sample_size,F),]  #data is for external validation
+  }
+  
+  model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50), data=dev_data, family=binomial(link="logit"))
+  pi <- predict(model, type="response", newdata=val_data)
+  val_data$pi <- pi
+  val_data$logit_pi <- log(pi/(1-pi))
+  
+  zs <- sort(c(as.vector(quantile(pi,(0:99)/100)),settings$zs))
+  n <- dim(val_data)[1]
+```
+
+
+### Bootstrap approach
+```{R}
+  NBh_model <- NBh_all <- rep(0,length(zs))
+  for(i in 1:length(zs))
+  {
+    NBh_model[i] <- mean((pi>zs[i])*(val_data$Y - (1-val_data$Y)*zs[i]/(1-zs[i])))
+    NBh_all[i] <- mean((val_data$Y - (1-val_data$Y)*zs[i]/(1-zs[i])))
+  }
+
+  max_y <- max(0,NBh_all,NBh_model)
+  min_y <- min(NBh_model)
+  plot(zs, NBh_all, col='black', type='l', ylim=c(min_y,max_y))
+  lines(zs, zs*0, col='grey', type='l')
+  lines(zs, NBh_model, col='blue', type='l')
+
+#And now uncertainty around it
+  bs_NBh_model <- bs_NBh_all <- bs_max_NBh <- matrix(0, nrow=settings$n_sim_bs, ncol=length(zs))
+
+  for(i_sim in 1:settings$n_sim_bs)
+  {
+    w <- voipred:::bootstrap(n,settings$Bayesian_bootstrap)
+    
+    for(i in 1:length(zs))
+    {
+      bs_NBh_model[i_sim,i] <- sum(w*(val_data$pi>zs[i])*(val_data$Y - (1-val_data$Y)*zs[i]/(1-zs[i])))/n
+      bs_NBh_all[i_sim,i] <- sum(w*(val_data$Y - (1-val_data$Y)*zs[i]/(1-zs[i])))/n
+      bs_max_NBh[i_sim,i] <- max(bs_NBh_model[i_sim,i],bs_NBh_all[i_sim,i],0)
+    }
+  }
+  
+  NBh_all <- colMeans(bs_NBh_all)
+  NBh_model <- colMeans(bs_NBh_model)
+  max_NBh <- colMeans(bs_max_NBh)
+
+  max_y <- max(0,NBh_all,NBh_model)
+  plot(zs, NBh_all, col='black', type='l', ylim=c(0,max_y))
+  lines(zs, NBh_model, col='blue', type='l')
+
+  ci_model <- apply(bs_NBh_model,MARGIN = 2,FUN = quantile, c(0.025,0.975))
+  lines(zs,ci_model[1,], type='l', col='gray')
+  lines(zs,ci_model[2,], type='l', col='gray')
+
+  ci_all <- apply(bs_NBh_all,MARGIN = 2,FUN = quantile, c(0.025,0.975))
+  lines(zs,ci_model[1,], type='l', col='gray')
+  lines(zs,ci_model[2,], type='l', col='gray')
+
+  ENB_current <- pmax(NBh_all,NBh_model,0)
+  ENB_perfect <- max_NBh
+  
+  lines(zs, ENB_perfect, col='red', type='l')
+  lines(zs, ENB_current, col='green', type='l')
+  #EVPI for validation:
+  
+  EVPIv_bs <- ENB_perfect-ENB_current
+  plot(zs,EVPIv_bs,type='l', col='blue')
+```
+
+
+
+###  Univariate approach
+```{R eval=FALSE, echo=FALSE}
+  bs_NB_model <- bs_NB_all <- bs_max_NB <- bs_NB_max <- matrix(0, nrow=settings$n_sim_un, ncol=length(z))
+
+  for(i_sim in 1:settings$n_sim_un)
+  {
+    w_x <- voipred:::bootstrap(n,settings$Bayesian_bootstrap)
+    val_data$w_pop <- voipred:::bootstrap(n,settings$Bayesian_bootstrap)
+    
+    pop_model <- suppressWarnings(glm(formula= Y ~ logit_pi, data=val_data, family=binomial(link="logit"), weights = w_pop))
+    
+    p <- predict(pop_model, type="response", newdata = val_data)
+
+    for(i in 1:length(zs))
+    {
+      bs_NB_model[i_sim,i] <- sum(w_x*(val_data$pi>zs[i])*(p - (1-p)*zs[i]/(1-zs[i])))/n
+      bs_NB_all[i_sim,i] <- sum(w_x*(p - (1-p)*zs[i]/(1-zs[i])))/n
+      bs_max_NB[i_sim,i] <- max(bs_NB_model[i_sim,i],bs_NB_all[i_sim,i],0)
+      bs_NB_max[i_sim,i] <- sum(w_x*((p>zs[i])*(p - (1-p)*zs[i]/(1-zs[i]))))/n
+    }
+  }
+
+  ENB_current <- pmax(colMeans(bs_NB_all),colMeans(bs_NB_model),0)
+  ENB_perfect_val <- colMeans(bs_max_NB)
+  ENB_perfect_dev <- colMeans(bs_NB_max)
+  EVPI_val <- ENB_perfect_val-ENB_current
+  EVPI_dev <- ENB_perfect_dev-ENB_current
+  
+  EINB_current <- (ENB_current-pmax(colMeans(bs_NB_all),0)) 
+  EINB_perfect <- (ENB_perfect_dev-pmax(colMeans(bs_NB_all),0))
+  EVPIr_dev <- EINB_perfect/EINB_current
+  
+  plot(z,EINB_perfect,col='red', type='l')
+  lines(z,EINB_current)
+  
+  plot(z, EVPIr_dev, type='l', ylim=c(0,min(max(EVPIr_dev,na.rm=T),10)))
+  
+  max_y <- max(EVPI_val,EVPI_dev)
+  plot(z,EVPI_val,type='l', col='red', ylim=c(0,max_y))
+  lines(z,EVPI_dev,type='l', col='green')
+  
+  mean(EVPI_val)
+  mean(EVPI_dev)
+  
+```
+
+
+
+
+
+###  Reference modeling approach
+```{R}
+  bs_NB_model <- bs_NB_all <- bs_max_NB <- bs_NB_max <- matrix(0, nrow=settings$n_sim_mb, ncol=length(zs))
+
+  for(i_sim in 1:settings$n_sim_mb)
+  {
+    w_x <- voipred:::bootstrap(n,settings$Bayesian_bootstrap)
+    val_data$w_y <- voipred:::bootstrap(n,settings$Bayesian_bootstrap)
+    
+    pop_model <- suppressWarnings(glm(formula = model$call$formula, family=binomial(link="logit"), data=val_data, weights = w_y))
+    
+    p <- predict(pop_model, type="response", newdata = val_data)
+
+    for(i in 1:length(zs))
+    {
+      bs_NB_model[i_sim,i] <- sum(w_x*(val_data$pi>zs[i])*(p - (1-p)*zs[i]/(1-zs[i])))/n
+      bs_NB_all[i_sim,i] <- sum(w_x*(p - (1-p)*zs[i]/(1-zs[i])))/n
+      bs_max_NB[i_sim,i] <- max(bs_NB_model[i_sim,i],bs_NB_all[i_sim,i],0)
+      bs_NB_max[i_sim,i] <- sum(w_x*((p>zs[i])*(p - (1-p)*zs[i]/(1-zs[i]))))/n
+    }
+  }
+
+  ENB_current <- pmax(colMeans(bs_NB_all),colMeans(bs_NB_model),0)
+  ENBv_perfect <- colMeans(bs_max_NB)
+  ENBd_perfect <- colMeans(bs_NB_max)
+  EVPIv <- ENBv_perfect-ENB_current
+  EVPId <- ENBd_perfect-ENB_current
+  
+  EINB_current <- (ENB_current-pmax(colMeans(bs_NB_all),0)) 
+  EINBd_perfect <- (ENBd_perfect-pmax(colMeans(bs_NB_all),0))
+  plot(zs,EINBd_perfect,col='red', type='l', main="EINBd")
+  lines(zs,EINB_current)
+  
+  EINBv_perfect <- (ENBv_perfect-pmax(colMeans(bs_NB_all),0))
+  plot(zs,EINBv_perfect,col='red', type='l', main="EINBv")
+  lines(zs,EINB_current)
+  
+  EVPIdr <- EINBd_perfect/EINB_current
+  plot(zs, EVPIdr, type='l', ylim=c(0,min(max(EVPIdr,na.rm=T),10)), main="EVPIdr")
+  
+  EVPIvr <- EINBv_perfect/EINB_current
+  plot(zs, EVPIvr, type='l', ylim=c(0,min(max(EVPIvr,na.rm=T),10)), main="EVPIvr")
+
+  plot(zs,EVPId,type='l', col='red', main = "EVPId")
+  plot(zs,EVPIv,type='l', col='blue', main = "EVPIv")
+  
+  plot(zs,EVPId,type='l', col='red', main = "EVPId+EVPIv")
+  lines(zs,EVPIv,type='l', col='blue')
+
+  mean(EVPIv_bs)
+  mean(EVPIv)
+  mean(EVPId)
+  
+```
+
+
+### At preferred threhsold
+```{r}
+EVPIv_bs[which(zs %in% settings$zs)]
+EVPIv[which(zs %in% settings$zs)]
+EVPId[which(zs %in% settings$zs)]
+```
+
+
+
