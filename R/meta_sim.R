@@ -3,10 +3,10 @@ library(progress)
 
 #True model
 settings <- list(
-  true_model = c(-2,1,2,3),  #as.matrix(c(-2,1,0,1,0)),
+  true_model = c(-2,1),  #as.matrix(c(-2,1,0,1,0)),
   z = 0.1,
   sample_sizes= c(125,250,500,1000,2000),
-  model_generator_sigma = diag(4),
+  model_generator_sigma = diag(2),
   model_generator_sample_size=50,
   universe_n = 10^6,
   n_sim_outer= 100,
@@ -114,11 +114,20 @@ meta_sim <- function(n_sim_outer, max_n_sim_inner, sample_size, universe, method
         betas <- rmvnorm(1,mus,covmat)
         p__ <- as.vector(1/(1+exp(-x_%*%t(betas))))
       }
+      else if(method=="naive_BB")
+      {
+        p__ <- y_  #naive method with BB
+      }
+      else if(method=="naive_OB")
+      {
+        w_y <- voipred:::bootstrap(sample_size, Bayesian = F)
+        p__ <- y_  #naive method with BB
+      }
       else
       {
-        p__ <- y_
+          stop("Method",method,"Not regonized")
       }
-
+      
       bs_NB_model_this <- sum(w_x*(pi_>z)*(p__ - (1-p__)*z/(1-z)))/sample_size
       bs_NB_all_this <- sum(w_x*(p__ - (1-p__)*z/(1-z)))/sample_size
       bs_max_NB <- bs_max_NB + max(0, bs_NB_model_this, bs_NB_all_this)
@@ -139,15 +148,11 @@ meta_sim <- function(n_sim_outer, max_n_sim_inner, sample_size, universe, method
         #if(sum(is.nan(cvs))>0) browser();
         if(max(cvs[which(ses>0)])<0.2 || j_sim==max_n_sim_inner) break;
       }
-    }
-    #if(j_sim==1000) cat('*')
-
+    } #repeat
+    
     evpi_v[i_sim] <- bs_max_NB/j_sim - max(0,bs_NB_model,bs_NB_all)/j_sim
     evpi_d[i_sim] <- bs_NB_max/j_sim - max(0,bs_NB_model,bs_NB_all)/j_sim
     winner_val[i_sim] <- which.max(c(0,bs_NB_model,bs_NB_all))
-
-    #proposed_model$b0 <- coefficients(local_model)[1]
-    #proposed_model$b1 <- coefficients(local_model)[2]
   }
 
   if(settings$verbose) print(winner_val)
@@ -166,10 +171,11 @@ meta_sim <- function(n_sim_outer, max_n_sim_inner, sample_size, universe, method
 
 main <- function(instanceId=0, seed=instanceId)
 {
+  message("Instance id:",instanceId)
   if(instanceId>0)
   {
     require("GRcomp")
-    GRconnect("voipredex")
+    GRconnect("voipred_exval")
   }
 
   if(!is.null(seed)) set.seed(seed)
@@ -198,8 +204,10 @@ main <- function(instanceId=0, seed=instanceId)
                          as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="bootstrap"))))
       res <- rbind(res,c(method="likelihood",sample_size=sample_size,
                          as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="likelihood"))))
-      res <- rbind(res,c(method="naive",sample_size=sample_size,
-                         as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="naive"))))
+      res <- rbind(res,c(method="naive_BB",sample_size=sample_size,
+                         as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="naive_BB"))))
+      res <- rbind(res,c(method="naive_OB",sample_size=sample_size,
+                         as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="naive_OB"))))
     }
 
     if(i%%50==0 && instanceId>0)
@@ -222,8 +230,10 @@ process_results <- function()
   bsv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='bootstrap' GROUP by sample_size ORDER BY sample_size*1")
   lld <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_d) AS val, SQRT(VARIANCE(evpi_d)/COUNT(*)) AS val_se, AVG(meta_evpi_d) AS meta, SQRT(VARIANCE(meta_evpi_d)/COUNT(*)) AS meta_se,  STDEV(evpi_d)/SQRT(COUNT(*)) aS SE FROM res WHERE method='likelihood' GROUP by sample_size ORDER BY sample_size*1")
   llv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='likelihood' GROUP by sample_size ORDER BY sample_size*1")
-  nvd <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_d) AS val, SQRT(VARIANCE(evpi_d)/COUNT(*)) AS val_se, AVG(meta_evpi_d) AS meta, SQRT(VARIANCE(meta_evpi_d)/COUNT(*)) AS meta_se,  STDEV(evpi_d)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive' GROUP by sample_size ORDER BY sample_size*1")
-  nvv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive' GROUP by sample_size ORDER BY sample_size*1")
+  nvd_BB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_d) AS val, SQRT(VARIANCE(evpi_d)/COUNT(*)) AS val_se, AVG(meta_evpi_d) AS meta, SQRT(VARIANCE(meta_evpi_d)/COUNT(*)) AS meta_se,  STDEV(evpi_d)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive_BB' GROUP by sample_size ORDER BY sample_size*1")
+  nvv_BB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive_BB' GROUP by sample_size ORDER BY sample_size*1")
+  nvd_OB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_d) AS val, SQRT(VARIANCE(evpi_d)/COUNT(*)) AS val_se, AVG(meta_evpi_d) AS meta, SQRT(VARIANCE(meta_evpi_d)/COUNT(*)) AS meta_se,  STDEV(evpi_d)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive_OB' GROUP by sample_size ORDER BY sample_size*1")
+  nvv_OB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive_OB' GROUP by sample_size ORDER BY sample_size*1")
 
   plot(bsv$sample_size, bsv$meta, type='l', ylim=c(0,max(bsv$val)), col='red', main="bsv")
   lines(bsv$sample_size, bsv$val, type='l',col='blue')
@@ -231,29 +241,33 @@ process_results <- function()
   plot(llv$sample_size, llv$meta, type='l', ylim=c(0,max(llv$val)), col='red', main="llv")
   lines(llv$sample_size, llv$val, type='l',col='blue')
 
-  plot(nvv$sample_size, nvv$meta, type='l',col='red', ylim=c(0,max(nvv$val)), main="nvv")
-  lines(nvv$sample_size, nvv$val, type='l',col='blue')
+  plot(nvv_BB$sample_size, nvv_BB$meta, type='l',col='red', ylim=c(0,max(nvv_BB$val)), main="nvv_BB")
+  lines(nvv_BB$sample_size, nvv_BB$val, type='l',col='blue')
+  
+  plot(nvv_OB$sample_size, nvv_OB$meta, type='l',col='red', ylim=c(0,max(nvv_OB$val)), main="nvv_OB")
+  lines(nvv_OB$sample_size, nvv_OB$val, type='l',col='blue')
 
-  plot(bsd$sample_size, bsd$meta, type='l', ylim=c(0,max(bsd$val)), col='red', main="bsd")
-  lines(bsd$sample_size, bsd$val, type='l',col='blue')
-
-  plot(lld$sample_size, lld$meta, type='l', ylim=c(0,max(lld$val)), col='red', main="lld")
-  lines(lld$sample_size, lld$val, type='l',col='blue')
-
-  plot(nvd$sample_size, nvd$meta, type='l',col='red', ylim=c(0,max(nvd$val)), main="nvd")
-  lines(nvd$sample_size, nvd$val, type='l',col='blue')
+  # plot(bsd$sample_size, bsd$meta, type='l', ylim=c(0,max(bsd$val)), col='red', main="bsd")
+  # lines(bsd$sample_size, bsd$val, type='l',col='blue')
+  # 
+  # plot(lld$sample_size, lld$meta, type='l', ylim=c(0,max(lld$val)), col='red', main="lld")
+  # lines(lld$sample_size, lld$val, type='l',col='blue')
+  # 
+  # plot(nvd$sample_size, nvd$meta, type='l',col='red', ylim=c(0,max(nvd$val)), main="nvd")
+  # lines(nvd$sample_size, nvd$val, type='l',col='blue')
 
   print(
     sqldf("SELECT method, sample_size, AVG(evpi_v-meta_evpi_v) AS bias, AVG(POWER(evpi_v-meta_evpi_v,2)) AS rmse FROM res GROUP BY method, sample_size")
   )
 
   return(list(
-    bsd = bsd,
+    #bsd = bsd,
     bsv = bsv,
-    lld = lld,
+    #lld = lld,
     llv = llv,
-    nvd = nvd,
-    nvv = nvv
+    #nvd = nvd,
+    nvv_BB = nvv_BB,
+    nvv_OB = nvv_OB
   ))
 }
 

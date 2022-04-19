@@ -1,7 +1,7 @@
 ---
 title: "Second attempt (From scratch)"
 author: "Mohsen Sadatsafavi"
-date: "2022.03.28"
+date: "2022.04.17"
 output: html_document
 editor_options:
   chunk_output_type: console
@@ -12,6 +12,12 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+
+  library(voipred)
+  library(rms)
+  set.seed(1)
+
+
 settings <- list(
   dev_sample_size = Inf,
   val_sample_size = 1000,
@@ -20,18 +26,8 @@ settings <- list(
   n_sim_mb = 1000 ,
   Bayesian_bootstrap =T,
   zs=c(0.01,0.02,0.05,0.1),
-  max_x_evpi_plot = 0.2   #For plots of evpi 
+  max_x_evpi_plot = 1   #For plots of evpi 
 )
-
-```
-
-
-
-```{r}
-  library(voipred)
-  library(rms)
-
-  set.seed(1)
 
   data(gusto)
   gusto$kill <- (as.numeric(gusto$Killip)>1)*1
@@ -114,54 +110,6 @@ settings <- list(
   #EVPI for validation:
   EVPIv_bs <- ENB_perfect-ENB_current
   plot(zs,EVPIv_bs,type='l', col='blue', xlim=c(0,settings$max_x_evpi_plot), ylim=c(0,max(EVPIv_bs[which(zs<=settings$max_x_evpi_plot)])))
-```
-
-
-
-###  Univariate approach
-```{R eval=FALSE, echo=FALSE}
-  bs_NB_model <- bs_NB_all <- bs_max_NB <- bs_NB_max <- matrix(0, nrow=settings$n_sim_un, ncol=length(z))
-
-  for(i_sim in 1:settings$n_sim_un)
-  {
-    w_x <- voipred:::bootstrap(n,settings$Bayesian_bootstrap)
-    val_data$w_pop <- voipred:::bootstrap(n,settings$Bayesian_bootstrap)
-    
-    pop_model <- suppressWarnings(glm(formula= Y ~ logit_pi, data=val_data, family=binomial(link="logit"), weights = w_pop))
-    
-    p <- predict(pop_model, type="response", newdata = val_data)
-
-    for(i in 1:length(zs))
-    {
-      bs_NB_model[i_sim,i] <- sum(w_x*(val_data$pi>zs[i])*(p - (1-p)*zs[i]/(1-zs[i])))/n
-      bs_NB_all[i_sim,i] <- sum(w_x*(p - (1-p)*zs[i]/(1-zs[i])))/n
-      bs_max_NB[i_sim,i] <- max(bs_NB_model[i_sim,i],bs_NB_all[i_sim,i],0)
-      bs_NB_max[i_sim,i] <- sum(w_x*((p>zs[i])*(p - (1-p)*zs[i]/(1-zs[i]))))/n
-    }
-  }
-
-  ENB_current <- pmax(colMeans(bs_NB_all),colMeans(bs_NB_model),0)
-  ENB_perfect_val <- colMeans(bs_max_NB)
-  ENB_perfect_dev <- colMeans(bs_NB_max)
-  EVPI_val <- ENB_perfect_val-ENB_current
-  EVPI_dev <- ENB_perfect_dev-ENB_current
-  
-  EINB_current <- (ENB_current-pmax(colMeans(bs_NB_all),0)) 
-  EINB_perfect <- (ENB_perfect_dev-pmax(colMeans(bs_NB_all),0))
-  EVPIr_dev <- EINB_perfect/EINB_current
-  
-  plot(z,EINB_perfect,col='red', type='l')
-  lines(z,EINB_current)
-  
-  plot(z, EVPIr_dev, type='l', ylim=c(0,min(max(EVPIr_dev,na.rm=T),10)))
-  
-  max_y <- max(EVPI_val,EVPI_dev)
-  plot(z,EVPI_val,type='l', col='red', ylim=c(0,max_y))
-  lines(z,EVPI_dev,type='l', col='green')
-  
-  mean(EVPI_val)
-  mean(EVPI_dev)
-  
 ```
 
 
