@@ -12,7 +12,8 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
       NB_all <- sum((val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
       
       parms <- NB_BVN(val_data$Y,val_data$pi,zs[j])
-      
+      if(parms[5]>0.999999) parms[5]<-0.999999
+    
       ENB_perfect[j] <- do.call(mu_max_truncated_bvn,as.list(parms))
       ENB_current[j] <- max(0,NB_model,NB_all)
     }
@@ -122,6 +123,8 @@ NB_BVN <- function(y,pi,z){
 
 
 mu_max_truncated_bvn <- function(mu1,mu2,sig1,sig2,rho,exact=T){
+  sig1 <- sqrt(sig1)
+  sig2 <- sqrt(sig2)
   f1 <-  function(mu1,mu2,sig1,sig2,rho){
     tmp1 <- sig1-rho*sig2
     tmp2 <- (-sig1*mu2+rho*sig2*mu1)/(sig1*sig2*sqrt(1-rho^2))

@@ -1,5 +1,7 @@
 library(mvtnorm)
 library(progress)
+library(sqldf)
+source('./R/core.R')
 
 #True model
 settings <- list(
@@ -9,7 +11,7 @@ settings <- list(
   model_generator_sigma = diag(2),
   model_generator_sample_size=50,
   universe_n = 10^6,
-  n_sim_outer= 100,
+  n_sim_outer= 1000,
   max_n_sim_inner= 1000,
   verbose = F
 )
@@ -70,98 +72,123 @@ generate_universe <- function(n, true_model)
 }
 
 
+
 meta_sim <- function(n_sim_outer, max_n_sim_inner, sample_size, universe, method)
 {
+  #cat(method,'\n')
   z <- settings$z
 
-  evpi_v <- evpi_d <- winner_val <- rep(NA,n_sim_outer)
+  evpi_v <- winner_val <- rep(NA,n_sim_outer)
   for(i_sim in 1:n_sim_outer)
   {
-
     #plot(pi[1:1000],p[1:1000])
-
-    x_ <- generate_sample(sample_size,universe$true_model)
-    xx_ <- x_[,2]^2 #For fun
-
-    p_ <- as.vector(1/(1+exp(-x_%*%as.matrix(universe$true_model))))
-    y_ <- rbinom(sample_size, size = 1, prob=p_)
-    pi_ <- as.vector(1/(1+exp(-x_%*%as.matrix(universe$proposed_model))))
-
-    bs_NB_model <- bs_NB_all <- bs_NB_max <- bs_max_NB <- 0
+  
+    repeat
+    {
+      x_ <- generate_sample(sample_size,universe$true_model)
+      xx_ <- x_[,2]^2 #For fun
+  
+      p_ <- as.vector(1/(1+exp(-x_%*%as.matrix(universe$true_model))))
+      y_ <- rbinom(sample_size, size = 1, prob=p_)
+      pi_ <- as.vector(1/(1+exp(-x_%*%as.matrix(universe$proposed_model))))
+      if(min(pi_)<z && max(pi_)>z) break;
+    }
+    
+    bs_NB_model <- bs_NB_all <- bs_max_NB <- 0
     s2s <- c(0,0,0)
     j_sim <- 0
 
-    if(method=="likelihood")
+    if(method=="asymptotic")
     {
-      local_model <- glm(formula = y_ ~ 0 + x_, family=binomial(link="logit"))
-      mus <- as.vector(coefficients(local_model))
-      covmat <- vcov(local_model)
+      parms <- NB_BVN(y_, pi_, z)
+      #cat(parms,'\n')
+      if(is.nan(parms[5])) {browser()}
+      if(parms[5]>0.99999) 
+      {
+        #rbrowser();
+        parms[5]<-0.999; 
+      }
+      tryCatch(
+      {
+        first_term <- do.call(mu_max_truncated_bvn,as.list(parms))
+      }, 
+      error=function(e) 
+      {
+        message("Error");  browser(); assign("first_term",max(0,parms[1],parms[2]),envir = parent.env(environment()))
+      })
+      
+      evpi_v[i_sim] <- first_term-max(0,parms[1],parms[2])
+      winner_val[i_sim] <- which.max(c(0,parms[1],parms[2]))
     }
-
-    repeat
+    else
     {
-      j_sim <- j_sim+1
-      w_x <- voipred:::bootstrap(sample_size, Bayesian = T)
-      w_y <- voipred:::bootstrap(sample_size, Bayesian = T)
-
-      if(method=="bootstrap")
+      if(method=="model_based_ll")
       {
-        local_model <-suppressWarnings(glm(formula = y_ ~ 0 + x_, family=binomial(link="logit"), weights = w_y))
-        p__ <- predict(local_model, type="response", newdata = as.data.frame(x_))
-      }
-      else if(method=="likelihood")
-      {
-        betas <- rmvnorm(1,mus,covmat)
-        p__ <- as.vector(1/(1+exp(-x_%*%t(betas))))
-      }
-      else if(method=="naive_BB")
-      {
-        p__ <- y_  #naive method with BB
-      }
-      else if(method=="naive_OB")
-      {
-        w_y <- voipred:::bootstrap(sample_size, Bayesian = F)
-        p__ <- y_  #naive method with BB
-      }
-      else
-      {
-          stop("Method",method,"Not regonized")
+        local_model <- glm(formula = y_ ~ 0 + x_, family=binomial(link="logit"))
+        mus <- as.vector(coefficients(local_model))
+        covmat <- vcov(local_model)
       }
       
-      bs_NB_model_this <- sum(w_x*(pi_>z)*(p__ - (1-p__)*z/(1-z)))/sample_size
-      bs_NB_all_this <- sum(w_x*(p__ - (1-p__)*z/(1-z)))/sample_size
-      bs_max_NB <- bs_max_NB + max(0, bs_NB_model_this, bs_NB_all_this)
-
-      #tmp_model <- sum(1*(pi_>z)*(p__ - (1-p__)*z/(1-z)))/sample_size
-      #tmp_all <- sum(1*(p__ - (1-p__)*z/(1-z)))/sample_size
-
-      s2s <- s2s + c(bs_NB_model_this^2,bs_NB_all_this^2,(bs_NB_model_this-bs_NB_all_this)^2)
-
-      bs_NB_model <- bs_NB_model + bs_NB_model_this
-      bs_NB_all <- bs_NB_all + bs_NB_all_this
-      bs_NB_max <- bs_NB_max + sum(w_x*((p__>z)*(p__ - (1-p__)*z/(1-z))))/sample_size
-
-      if(j_sim%%100==0)
+      repeat
       {
-        ses <- sqrt((s2s/j_sim-c((bs_NB_model/j_sim)^2,(bs_NB_all/j_sim)^2,((bs_NB_model-bs_NB_all)/j_sim)^2))/j_sim)
-        cvs <- abs(ses/c(bs_NB_model/j_sim,bs_NB_all/j_sim,bs_NB_model/j_sim-bs_NB_all/j_sim))
-        #if(sum(is.nan(cvs))>0) browser();
-        if(max(cvs[which(ses>0)])<0.2 || j_sim==max_n_sim_inner) break;
-      }
-    } #repeat
-    
-    evpi_v[i_sim] <- bs_max_NB/j_sim - max(0,bs_NB_model,bs_NB_all)/j_sim
-    evpi_d[i_sim] <- bs_NB_max/j_sim - max(0,bs_NB_model,bs_NB_all)/j_sim
-    winner_val[i_sim] <- which.max(c(0,bs_NB_model,bs_NB_all))
+        j_sim <- j_sim+1
+        w_x <- voipred:::bootstrap(sample_size, Bayesian = T)
+        w_y <- voipred:::bootstrap(sample_size, Bayesian = T)
+  
+        if(method=="model_based_bs")
+        {
+          local_model <-suppressWarnings(glm(formula = y_ ~ 0 + x_, family=binomial(link="logit"), weights = w_y))
+          p__ <- predict(local_model, type="response", newdata = as.data.frame(x_))
+        }
+        else if(method=="model_based_ll")
+        {
+          betas <- rmvnorm(1,mus,covmat)
+          p__ <- as.vector(1/(1+exp(-x_%*%t(betas))))
+        }
+        else if(method=="BB")
+        {
+          p__ <- y_  #naive method with BB
+        }
+        else if(method=="OB")
+        {
+          w_y <- voipred:::bootstrap(sample_size, Bayesian = F)
+          p__ <- y_  #naive method with BB
+        }
+        else
+        {
+            stop("Method",method,"Not regonized")
+        }
+        
+        bs_NB_model_this <- sum(w_x*(pi_>z)*(p__ - (1-p__)*z/(1-z)))/sample_size
+        bs_NB_all_this <- sum(w_x*(p__ - (1-p__)*z/(1-z)))/sample_size
+        bs_max_NB <- bs_max_NB + max(0, bs_NB_model_this, bs_NB_all_this)
+  
+        #tmp_model <- sum(1*(pi_>z)*(p__ - (1-p__)*z/(1-z)))/sample_size
+        #tmp_all <- sum(1*(p__ - (1-p__)*z/(1-z)))/sample_size
+  
+        s2s <- s2s + c(bs_NB_model_this^2,bs_NB_all_this^2,(bs_NB_model_this-bs_NB_all_this)^2)
+  
+        bs_NB_model <- bs_NB_model + bs_NB_model_this
+        bs_NB_all <- bs_NB_all + bs_NB_all_this
+      
+        if(j_sim%%100==0)
+        {
+          ses <- sqrt((s2s/j_sim-c((bs_NB_model/j_sim)^2,(bs_NB_all/j_sim)^2,((bs_NB_model-bs_NB_all)/j_sim)^2))/j_sim)
+          cvs <- abs(ses/c(bs_NB_model/j_sim,bs_NB_all/j_sim,bs_NB_model/j_sim-bs_NB_all/j_sim))
+          #if(sum(is.nan(cvs))>0) browser();
+          if(max(cvs[which(ses>0)])<0.2 || j_sim==max_n_sim_inner) break;
+        }
+      } #repeat
+      evpi_v[i_sim] <- bs_max_NB/j_sim - max(0,bs_NB_model,bs_NB_all)/j_sim
+      winner_val[i_sim] <- which.max(c(0,bs_NB_model,bs_NB_all))
+    }
   }
 
   if(settings$verbose) print(winner_val)
 
   c(
     evpi_v=mean(evpi_v),
-    evpi_d=mean(evpi_d),
-    meta_evpi_v = max(0,universe$NB_model,universe$NB_all)-mean(c(0,universe$NB_model,universe$NB_all)[winner_val]),
-    meta_evpi_d = universe$NB_max - mean(c(0,universe$NB_model,universe$NB_all)[winner_val])
+    meta_evpi_v = max(0,universe$NB_model,universe$NB_all)-mean(c(0,universe$NB_model,universe$NB_all)[winner_val])
   )
 }
 
@@ -192,22 +219,29 @@ main <- function(instanceId=0, seed=instanceId)
   {
     pb$tick()
 
-    proposed_model <- generate_proposed_model(sigma = settings$model_generator_sigma)
-    print(proposed_model)
-    universe$proposed_model <<- proposed_model
-    universe$pi <<- as.vector(1/(1+exp(-universe$x%*%as.matrix(proposed_model))))
+    repeat
+    {
+      proposed_model <- generate_proposed_model(sigma = settings$model_generator_sigma)
+      universe$proposed_model <<- proposed_model
+      universe$pi <<- as.vector(1/(1+exp(-universe$x%*%as.matrix(proposed_model))))
+      if(max(universe$pi)>settings$z && min(universe$pi)<settings$z) break;
+    }
     universe$NB_model <<- mean((universe$pi>settings$z)*(universe$p-(1-universe$p)*settings$z/(1-settings$z)))
-
+    print(proposed_model)
+    
     for(sample_size in sample_sizes)
     {
-      res <- rbind(res,c(method="bootstrap",sample_size=sample_size,
-                         as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="bootstrap"))))
-      res <- rbind(res,c(method="likelihood",sample_size=sample_size,
-                         as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="likelihood"))))
-      res <- rbind(res,c(method="naive_BB",sample_size=sample_size,
-                         as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="naive_BB"))))
-      res <- rbind(res,c(method="naive_OB",sample_size=sample_size,
-                         as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="naive_OB"))))
+      #  res <- rbind(res,c(method="model_based_bs",sample_size=sample_size,
+      #                     as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="model_based_bs"))))
+      #  res <- rbind(res,c(method="model_based_ll",sample_size=sample_size,
+      #                     as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="model_based_ll"))))
+      #  res <- rbind(res,c(method="BB",sample_size=sample_size,
+      #                     as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="BB"))))
+      #  res <- rbind(res,c(method="OB",sample_size=sample_size,
+      #                     as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="OB"))))
+      res <- rbind(res,c(method="asymptotic",sample_size=sample_size,
+                         as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="asymptotic"))))
+      
     }
 
     if(i%%50==0 && instanceId>0)
@@ -226,15 +260,12 @@ main <- function(instanceId=0, seed=instanceId)
 process_results <- function()
 {
   require("sqldf")
-  bsd <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_d) AS val, SQRT(VARIANCE(evpi_d)/COUNT(*)) AS val_se, AVG(meta_evpi_d) AS meta, SQRT(VARIANCE(meta_evpi_d)/COUNT(*)) AS meta_se,  STDEV(evpi_d)/SQRT(COUNT(*)) aS SE FROM res WHERE method='bootstrap' GROUP by sample_size ORDER BY sample_size*1")
-  bsv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='bootstrap' GROUP by sample_size ORDER BY sample_size*1")
-  lld <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_d) AS val, SQRT(VARIANCE(evpi_d)/COUNT(*)) AS val_se, AVG(meta_evpi_d) AS meta, SQRT(VARIANCE(meta_evpi_d)/COUNT(*)) AS meta_se,  STDEV(evpi_d)/SQRT(COUNT(*)) aS SE FROM res WHERE method='likelihood' GROUP by sample_size ORDER BY sample_size*1")
-  llv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='likelihood' GROUP by sample_size ORDER BY sample_size*1")
-  nvd_BB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_d) AS val, SQRT(VARIANCE(evpi_d)/COUNT(*)) AS val_se, AVG(meta_evpi_d) AS meta, SQRT(VARIANCE(meta_evpi_d)/COUNT(*)) AS meta_se,  STDEV(evpi_d)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive_BB' GROUP by sample_size ORDER BY sample_size*1")
-  nvv_BB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive_BB' GROUP by sample_size ORDER BY sample_size*1")
-  nvd_OB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_d) AS val, SQRT(VARIANCE(evpi_d)/COUNT(*)) AS val_se, AVG(meta_evpi_d) AS meta, SQRT(VARIANCE(meta_evpi_d)/COUNT(*)) AS meta_se,  STDEV(evpi_d)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive_OB' GROUP by sample_size ORDER BY sample_size*1")
-  nvv_OB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='naive_OB' GROUP by sample_size ORDER BY sample_size*1")
-
+  bsv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='model_based_bs' GROUP by sample_size ORDER BY sample_size*1")
+  llv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='model_based_ll' GROUP by sample_size ORDER BY sample_size*1")
+  nvv_BB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='BB' GROUP by sample_size ORDER BY sample_size*1")
+  nvv_OB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='OB' GROUP by sample_size ORDER BY sample_size*1")
+  asy<- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='asymptotic' GROUP by sample_size ORDER BY sample_size*1")
+  
   plot(bsv$sample_size, bsv$meta, type='l', ylim=c(0,max(bsv$val)), col='red', main="bsv")
   lines(bsv$sample_size, bsv$val, type='l',col='blue')
 
@@ -246,6 +277,10 @@ process_results <- function()
   
   plot(nvv_OB$sample_size, nvv_OB$meta, type='l',col='red', ylim=c(0,max(nvv_OB$val)), main="nvv_OB")
   lines(nvv_OB$sample_size, nvv_OB$val, type='l',col='blue')
+  
+  plot(asy$sample_size, asy$meta, type='l',col='red', ylim=c(0,max(asy$val)), main="asy")
+  lines(asy$sample_size, asy$val, type='l',col='blue')
+  
 
   # plot(bsd$sample_size, bsd$meta, type='l', ylim=c(0,max(bsd$val)), col='red', main="bsd")
   # lines(bsd$sample_size, bsd$val, type='l',col='blue')
@@ -262,12 +297,13 @@ process_results <- function()
 
   return(list(
     #bsd = bsd,
-    bsv = bsv,
+    model_based_bbs = bsv,
     #lld = lld,
-    llv = llv,
+    model_based_ll = llv,
     #nvd = nvd,
-    nvv_BB = nvv_BB,
-    nvv_OB = nvv_OB
+    model_based_BB = nvv_BB,
+    model_based_OB = nvv_OB,
+    asy = asy
   ))
 }
 

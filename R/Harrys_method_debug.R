@@ -22,6 +22,7 @@ c(mean(NB_model),mean(NB_all),var(NB_model),var(NB_all),cor(NB_model,NB_all))
 cat(res <- NB_BVN(val_data$Y,val_data$pi,z))
 
 first_term <- do.call(mu_max_truncated_bvn,as.list(res))
+first_term_sim <- do.call(simulate_first_term,as.list(res))
 mean(X)
 
 EVPI <- c()
@@ -32,4 +33,14 @@ for(z in (10:99)/1000)
   first_term <- do.call(mu_max_truncated_bvn,as.list(res))
   second_term <- max(0,res[1],res[2])
   EVPI <- c(EVPI,first_term-second_term)
+}
+
+
+
+
+simulate_first_term <- function(mu1,mu2,sig1,sig2,rho, n_sim=10^7)
+{
+  sigma <- matrix(c(sig1, rho*sqrt(sig1*sig2), rho*sqrt(sig1*sig2), sig2),nrow=2)
+  X <- rmvnorm(n_sim,c(mu1,mu2),sigma)
+  mean(apply(cbind(0,X),1,max))
 }

@@ -2,7 +2,8 @@ library(mvtnorm)
 
 # exact method ------------------------------------------------------------
 mu_max_truncated_bvn <- function(mu1,mu2,sig1,sig2,rho,exact=T){
-  
+  sig1 <- sqrt(sig1)
+  sig2 <- sqrt(sig2)
   f1 <-  function(mu1,mu2,sig1,sig2,rho){
     tmp1 <- sig1-rho*sig2
     tmp2 <- (-sig1*mu2+rho*sig2*mu1)/(sig1*sig2*sqrt(1-rho^2))

@@ -43,7 +43,7 @@ pi <- predict(model, type="response", newdata=val_data)
 val_data$pi <- pi
 val_data$logit_pi <- log(pi/(1-pi))
 
-zs <- sort(c(as.vector(quantile(pi,(0:99)/100)),settings$zs))
+zs <- sort(c(as.vector(quantile(pi,(1:99)/100)),settings$zs))
 
 
 
@@ -56,28 +56,31 @@ zs <- sort(c(as.vector(quantile(pi,(0:99)/100)),settings$zs))
 
 sim <- function(n_sim=10)
 {
+  set.seed(1)
   for(i in 1:n_sim)
   {
-    set.seed(i_sim)
     cat('.')
     this_data <- data_us[sample(1:(dim(data_us)[1]),settings$val_sample_size,F),]  #data is for external validation
     this_data$pi <- predict(model,newdata = this_data, type='response')
-    saveRDS(this_data,"val_data.RDS")
     #this_model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50), data=this_data, family=binomial(link="logit"))
     #pi <- predict(this_model, type="response", newdata=this_data)
     #this_data$pi <- pi
-    res_bs <- res_ll <- res_mb <- NULL
-    tmp_bs <- voi_ex_glm(model, this_data, method="naive", zs = zs)
-    tmp_ll <- voi_ex_glm(model, this_data, method="likelihood", zs = zs)
-    tmp_mb <- voi_ex_glm(model, this_data, method="bootstrap", zs = zs)
-    plot(zs,tmp_bs$EVPIv, type='l')
-    lines(zs,tmp_ll$EVPIv, type='l', col='blue')
-    lines(zs,tmp_mb$EVPIv, type='l', col='red')
+    res_bs <- res_ll <- res_mb <- res_as <- NULL
+    tmp_bs <- voi_ex_glm(model, this_data, method="bootstrap", zs = zs)
+    #tmp_ll <- voi_ex_glm(model, this_data, method="model_based_ll", zs = zs)
+    #tmp_mb <- voi_ex_glm(model, this_data, method="model_based_bs", zs = zs)
+    tmp_as <- voi_ex_glm(model, this_data, method="asymptotic", zs = zs)
+    
+    plot(zs,tmp_bs$EVPIv, type='l', xlim=c(0,0.2))
+    #lines(zs,tmp_ll$EVPIv, type='l', col='blue')
+    #lines(zs,tmp_mb$EVPIv, type='l', col='red')
+    lines(zs,tmp_as$EVPIv, type='l', col='orange')
     res_bs <- rbind(res_bs,tmp_bs)
-    res_ll <- rbind(res_ll,tmp_ll)
-    res_mb <- rbind(res_mb,tmp_mb)
+    #res_ll <- rbind(res_ll,tmp_ll)
+    #res_mb <- rbind(res_mb,tmp_mb)
+    res_as <- rbind(res_as,tmp_as)
   }
-  list(res_bs=res_bs,res_ll=res_ll,res_mb=res_mb)
+  list(res_bs=res_bs,res_as)
 }
 
 
@@ -88,8 +91,9 @@ sim <- function(n_sim=10)
 
 
 
-sim_by_size <- function(n_sim=10, sample_sizes=c(250,500,1000,4000),zs=c(0.01,0.02,0.05,0.1))
+sim_by_size <- function(n_sim=10, sample_sizes=c(250,500,1000,4000,Inf),zs=c(0.01,0.02,0.05,0.1))
 {
+  set.seed(1)
   out <- data.frame(method=character(), sample_size=integer())
   for(i in 1:length(zs))
   {
@@ -124,8 +128,11 @@ sim_by_size <- function(n_sim=10, sample_sizes=c(250,500,1000,4000),zs=c(0.01,0.
       tmp <- voi_ex_glm(model, this_data, method="bootstrap", Bayesian_bootstrap = F, zs = zs)
       out[index,'method'] <- "OB"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
       index <- index+1
-      tmp <- voi_ex_glm(model, this_data, method="model_based_bs", Bayesian_bootstrap = T, zs = zs)
-      out[index,'method'] <- "likelihood"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
+      #tmp <- voi_ex_glm(model, this_data, method="model_based_bs", Bayesian_bootstrap = T, zs = zs)
+      #out[index,'method'] <- "mbbs"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
+      #index <- index+1
+      tmp <- voi_ex_glm(model, this_data, method="asymptotic", zs = zs)
+      out[index,'method'] <- "asy"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
       index <- index+1
     }
   }
