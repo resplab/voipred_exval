@@ -182,3 +182,22 @@ mu_max_truncated_bvn <- function(mu1,mu2,sig1,sig2,rho,exact=T){
 }
 
 
+
+bootstrap <- function (n, Bayesian=F, weights=NULL)
+{
+  if(Bayesian)
+  {
+    if(!is.null(weights)) stop("BAyesian bootstrap currently does not work with weighted samples.")
+    u <- c(0,sort(runif(n-1)),1)
+    return((u[-1] - u[-length(u)])*n)
+  }
+  else
+  {
+    if(is.null(weights)) weights <-rep(1/n,n)
+    u <- rmultinom(1,n,weights)
+    return(u)
+  }
+}
+
+
+

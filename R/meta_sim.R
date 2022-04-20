@@ -18,7 +18,7 @@ settings <- list(
   model_generator_sigma = diag(2)/4,
   model_generator_sample_size=50,
   universe_n = 10^7,
-  n_sim_outer= 100,
+  n_sim_outer= 1000,
   max_n_sim_inner= 1000,
   verbose = F
 )
@@ -139,8 +139,8 @@ meta_sim <- function(n_sim_outer, max_n_sim_inner, sample_size, universe, method
       repeat
       {
         j_sim <- j_sim+1
-        w_x <- voipred:::bootstrap(sample_size, Bayesian = T)
-        w_y <- voipred:::bootstrap(sample_size, Bayesian = T)
+        w_x <- bootstrap(sample_size, Bayesian = T)
+        w_y <- bootstrap(sample_size, Bayesian = T)
   
         if(method=="model_based_bs")
         {
@@ -158,7 +158,7 @@ meta_sim <- function(n_sim_outer, max_n_sim_inner, sample_size, universe, method
         }
         else if(method=="OB")
         {
-          w_y <- voipred:::bootstrap(sample_size, Bayesian = F)
+          w_y <- bootstrap(sample_size, Bayesian = F)
           p__ <- y_  #naive method with BB
         }
         else
