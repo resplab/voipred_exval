@@ -1,17 +1,24 @@
 library(mvtnorm)
 library(progress)
 library(sqldf)
-source('./R/core.R')
 
-#True model
+if(exists("instanceId")) #Means GRcomp is loaded!
+{
+  source(GRdownload("core.R"))
+}else
+{
+  source('./R/core.R')
+}
+
+
 settings <- list(
   true_model = c(-2,1),  #as.matrix(c(-2,1,0,1,0)),
   z = 0.1,
-  sample_sizes= c(125,250,500,1000,2000),
-  model_generator_sigma = diag(2),
+  sample_sizes= c(500,1000,2000,4000,8000),
+  model_generator_sigma = diag(2)/4,
   model_generator_sample_size=50,
-  universe_n = 10^6,
-  n_sim_outer= 1000,
+  universe_n = 10^7,
+  n_sim_outer= 100,
   max_n_sim_inner= 1000,
   verbose = F
 )
@@ -196,17 +203,16 @@ meta_sim <- function(n_sim_outer, max_n_sim_inner, sample_size, universe, method
 
 
 
-main <- function(instanceId=0, seed=instanceId)
+main <- function()
 {
-  message("Instance id:",instanceId)
-  if(instanceId>0)
+  if(!exists("instanceId"))
   {
-    require("GRcomp")
-    GRconnect("voipred_exval")
+    instanceId <- 0
   }
-
-  if(!is.null(seed)) set.seed(seed)
-
+  set.seed(instanceId)
+    
+  message("Instance id:",instanceId)
+  
   generate_universe(n=settings$universe_n, true_model=settings$true_model)
 
   sample_sizes <- settings$sample_sizes
@@ -224,7 +230,14 @@ main <- function(instanceId=0, seed=instanceId)
       proposed_model <- generate_proposed_model(sigma = settings$model_generator_sigma)
       universe$proposed_model <<- proposed_model
       universe$pi <<- as.vector(1/(1+exp(-universe$x%*%as.matrix(proposed_model))))
-      if(max(universe$pi)>settings$z && min(universe$pi)<settings$z) break;
+      qs <- quantile(universe$pi,c(0.01,0.99))
+      if(qs[2]>settings$z && qs[1]<settings$z) 
+      {
+        break;
+      }else
+      {
+        message("bad")
+      }
     }
     universe$NB_model <<- mean((universe$pi>settings$z)*(universe$p-(1-universe$p)*settings$z/(1-settings$z)))
     print(proposed_model)
@@ -235,11 +248,11 @@ main <- function(instanceId=0, seed=instanceId)
       #                     as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="model_based_bs"))))
       #  res <- rbind(res,c(method="model_based_ll",sample_size=sample_size,
       #                     as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="model_based_ll"))))
-      #  res <- rbind(res,c(method="BB",sample_size=sample_size,
-      #                     as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="BB"))))
-      #  res <- rbind(res,c(method="OB",sample_size=sample_size,
-      #                     as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="OB"))))
-      res <- rbind(res,c(method="asymptotic",sample_size=sample_size,
+        res <- rbind(res,c(method="BB",sample_size=sample_size,
+                           as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="BB"))))
+        res <- rbind(res,c(method="OB",sample_size=sample_size,
+                           as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="OB"))))
+        res <- rbind(res,c(method="asymptotic",sample_size=sample_size,
                          as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="asymptotic"))))
       
     }
@@ -260,25 +273,25 @@ main <- function(instanceId=0, seed=instanceId)
 process_results <- function()
 {
   require("sqldf")
-  bsv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='model_based_bs' GROUP by sample_size ORDER BY sample_size*1")
-  llv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='model_based_ll' GROUP by sample_size ORDER BY sample_size*1")
-  nvv_BB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='BB' GROUP by sample_size ORDER BY sample_size*1")
-  nvv_OB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='OB' GROUP by sample_size ORDER BY sample_size*1")
+  #bsv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='model_based_bs' GROUP by sample_size ORDER BY sample_size*1")
+  #llv <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='model_based_ll' GROUP by sample_size ORDER BY sample_size*1")
+  BB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='BB' GROUP by sample_size ORDER BY sample_size*1")
+  OB <- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='OB' GROUP by sample_size ORDER BY sample_size*1")
   asy<- sqldf("SELECT sample_size, COUNT(*) AS N, AVG(evpi_v) AS val, SQRT(VARIANCE(evpi_v)/COUNT(*)) AS val_se, AVG(meta_evpi_v) AS meta, SQRT(VARIANCE(meta_evpi_v)/COUNT(*)) AS meta_se,  STDEV(evpi_v)/SQRT(COUNT(*)) aS SE FROM res WHERE method='asymptotic' GROUP by sample_size ORDER BY sample_size*1")
   
-  plot(bsv$sample_size, bsv$meta, type='l', ylim=c(0,max(bsv$val)), col='red', main="bsv")
-  lines(bsv$sample_size, bsv$val, type='l',col='blue')
+  #plot(bsv$sample_size, bsv$meta, type='l', ylim=c(0,max(bsv$val)), col='red', main="bsv")
+  #lines(bsv$sample_size, bsv$val, type='l',col='blue')
 
-  plot(llv$sample_size, llv$meta, type='l', ylim=c(0,max(llv$val)), col='red', main="llv")
-  lines(llv$sample_size, llv$val, type='l',col='blue')
-
-  plot(nvv_BB$sample_size, nvv_BB$meta, type='l',col='red', ylim=c(0,max(nvv_BB$val)), main="nvv_BB")
-  lines(nvv_BB$sample_size, nvv_BB$val, type='l',col='blue')
+  # plot(llv$sample_size, llv$meta, type='l', ylim=c(0,max(llv$val)), col='red', main="llv")
+  # lines(llv$sample_size, llv$val, type='l',col='blue')
+  # 
+  plot(BB$sample_size, BB$meta, type='l',col='red', ylim=c(0,max(BB$val)), main="Bayesian bootstrap", xlab="Sample size", ylab="EVPIv")
+  lines(BB$sample_size, BB$val, type='l',col='blue')
+   
+  plot(OB$sample_size, OB$meta, type='l',col='red', ylim=c(0,max(OB$val)), main="Ordinary bootstrap", xlab="Sample size", ylab="EVPIv")
+  lines(OB$sample_size, OB$val, type='l',col='blue')
   
-  plot(nvv_OB$sample_size, nvv_OB$meta, type='l',col='red', ylim=c(0,max(nvv_OB$val)), main="nvv_OB")
-  lines(nvv_OB$sample_size, nvv_OB$val, type='l',col='blue')
-  
-  plot(asy$sample_size, asy$meta, type='l',col='red', ylim=c(0,max(asy$val)), main="asy")
+  plot(asy$sample_size, asy$meta, type='l',col='red', ylim=c(0,max(asy$val)), main="Asymptotic", xlab="Sample size", ylab="EVPIv")
   lines(asy$sample_size, asy$val, type='l',col='blue')
   
 
@@ -297,16 +310,16 @@ process_results <- function()
 
   return(list(
     #bsd = bsd,
-    model_based_bbs = bsv,
+    #model_based_bbs = bsv,
     #lld = lld,
-    model_based_ll = llv,
+    #model_based_ll = llv,
     #nvd = nvd,
-    model_based_BB = nvv_BB,
-    model_based_OB = nvv_OB,
+    BB = BB,
+    OB = OB,
     asy = asy
   ))
 }
 
 
-if(exists("instanceId"))  main(instanceId) else main()
+main()
 

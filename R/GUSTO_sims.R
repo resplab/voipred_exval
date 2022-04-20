@@ -91,7 +91,7 @@ sim <- function(n_sim=10)
 
 
 
-sim_by_size <- function(n_sim=10, sample_sizes=c(250,500,1000,4000,Inf),zs=c(0.01,0.02,0.05,0.1))
+sim_by_size <- function(n_sim=100, sample_sizes=c(250,500,1000),zs=c(0.01,0.02,0.05,0.1))
 {
   set.seed(1)
   out <- data.frame(method=character(), sample_size=integer())
@@ -110,31 +110,60 @@ sim_by_size <- function(n_sim=10, sample_sizes=c(250,500,1000,4000,Inf),zs=c(0.0
     
     for(i in 1:n_sim)
     {
+      #set.seed(i)
       cat('.')
       if(is.infinite(sample_size))
       {
         this_data <- data_us
+        this_data$pi <- predict(model,newdata = this_data, type='response')
         sample_size <- dim(this_data)[1]
       }
       else
       {
-        this_data <- data_us[sample(1:(dim(data_us)[1]),sample_size,F),]  #data is for external validation
+        repeat
+        {
+          this_data <- data_us[sample(1:(dim(data_us)[1]),sample_size,F),]  #data is for external validation
+          this_data$pi <- predict(model,newdata = this_data, type='response')
+          if(min(this_data$pi)<min(zs))
+          {
+            break;
+          }
+          else
+          {
+            cat('bad')
+          }
+        }
       }
-      this_data$pi <- predict(model,newdata = this_data, type='response')
+      
+      bad <- F
       
       tmp <- voi_ex_glm(model, this_data, method="bootstrap", Bayesian_bootstrap = T, zs = zs)
+      if(is.null(tmp)) bad <- T
       out[index,'method'] <- "BB"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
       index <- index+1
+      
       tmp <- voi_ex_glm(model, this_data, method="bootstrap", Bayesian_bootstrap = F, zs = zs)
+      if(is.null(tmp)) bad <- T
       out[index,'method'] <- "OB"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
       index <- index+1
-      #tmp <- voi_ex_glm(model, this_data, method="model_based_bs", Bayesian_bootstrap = T, zs = zs)
-      #out[index,'method'] <- "mbbs"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
-      #index <- index+1
+      # tmp <- voi_ex_glm(model, this_data, method="model_based_bs", Bayesian_bootstrap = T, zs = zs)
+      # out[index,'method'] <- "mbbs"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
+      # index <- index+1
+      
       tmp <- voi_ex_glm(model, this_data, method="asymptotic", zs = zs)
+      if(is.null(tmp)) bad <- T
       out[index,'method'] <- "asy"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
       index <- index+1
+      
+      if(bad)
+      {
+        index <- index -3
+        i <- i-1
+        message("bad")
+      }
     }
   }
+  
+  #sqldf("SELECT method, sample_size, AVG(val1) AS val1, AVG(val2) AS val2 , AVG(val3) AS val3 , AVG(val4) AS val4 from res GROUP BY method, sample_size")
   out
 }

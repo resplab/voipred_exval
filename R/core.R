@@ -14,7 +14,11 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
       parms <- NB_BVN(val_data$Y,val_data$pi,zs[j])
       if(parms[5]>0.999999) parms[5]<-0.999999
     
-      ENB_perfect[j] <- do.call(mu_max_truncated_bvn,as.list(parms))
+      tryCatch(
+        {ENB_perfect[j] <- do.call(mu_max_truncated_bvn,as.list(parms))}
+      , error=function(cond) {
+        return(NULL)
+      })
       ENB_current[j] <- max(0,NB_model,NB_all)
     }
     return(data.frame(z=zs, ENB_perfect=ENB_perfect, ENB_current=ENB_current, EVPIv=ENB_perfect-ENB_current))
