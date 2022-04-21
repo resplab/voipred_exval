@@ -139,8 +139,8 @@ meta_sim <- function(n_sim_outer, max_n_sim_inner, sample_size, universe, method
       repeat
       {
         j_sim <- j_sim+1
-        w_x <- voipred:::bootstrap(sample_size, Bayesian = T)
-        w_y <- voipred:::bootstrap(sample_size, Bayesian = T)
+        w_x <- bootstrap(sample_size, Bayesian = T)
+        w_y <- bootstrap(sample_size, Bayesian = T)
   
         if(method=="model_based_bs")
         {
