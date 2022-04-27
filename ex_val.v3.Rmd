@@ -23,7 +23,7 @@ source('./R/core.R')
 
 settings <- list(
   dev_sample_size = Inf,
-  val_sample_size = Inf,
+  val_sample_size = 500,
   n_sim=1000,
   Bayesian_bootstrap =T,
   zs=c(0.01,0.02,0.05,0.1),
@@ -53,6 +53,8 @@ settings <- list(
   }
   
   model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50), data=dev_data, family=binomial(link="logit"))
+  #model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + pulse, data=dev_data, family=binomial(link="logit"))
+  
   pi <- predict(model, type="response", newdata=val_data)
   pi <- 1/(1+exp(0-(log(pi/(1-pi)))))
   val_data$pi <- pi
