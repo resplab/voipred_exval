@@ -18,6 +18,7 @@ source('./R/core.R')
   library(voipred)
   library(rms)
   library(mvtnorm)
+  library(pROC)
   set.seed(1)
 
 
@@ -26,7 +27,7 @@ settings <- list(
   val_sample_size = 500,
   n_sim=1000,
   Bayesian_bootstrap =T,
-  zs=c(0.01,0.02,0.05,0.1),
+  zs=c(0.01,0.05,0.1,0.02),
   max_x_evpi_plot = 0.2   #For plots of evpi 
 )
 
@@ -52,15 +53,25 @@ settings <- list(
     val_data <- data_us[sample(1:(dim(data_us)[1]),settings$val_sample_size,F),]  #data is for external validation
   }
   
-  model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50), data=dev_data, family=binomial(link="logit"))
-  #model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + pulse, data=dev_data, family=binomial(link="logit"))
+  #model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50), data=dev_data, family=binomial(link="logit"))
+  model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + pulse, data=dev_data, family=binomial(link="logit"))
   
   pi <- predict(model, type="response", newdata=val_data)
   pi <- 1/(1+exp(0-(log(pi/(1-pi)))))
   val_data$pi <- pi
   
-  zs <- sort(c(as.vector(quantile(pi,(1:99)/100)),settings$zs))
+  zs <- (c(as.vector(quantile(pi,(1:99)/100)),settings$zs))
+  main_index <- length(zs)
 ```
+
+
+### Candidate model's coefficients and c-statistic
+```{R}
+coefficients(model)
+pROC::auc(val_data$Y,val_data$pi)
+```
+
+
 
 
 ### DCA with bootstrap CIs
@@ -96,24 +107,28 @@ settings <- list(
   NBh_all <- colMeans(bs_NBh_all)
   NBh_model <- colMeans(bs_NBh_model)
   
-  max_y <- max(0,NBh_all,NBh_model)
-  plot(zs, NBh_all, col='black', type='l', ylim=c(0,max_y))
-  lines(zs, NBh_model, col='blue', type='l')
-  ci_model <- apply(bs_NBh_model,MARGIN = 2,FUN = quantile, c(0.025,0.975))
-  lines(zs,ci_model[1,], type='l', col='gray')
-  lines(zs,ci_model[2,], type='l', col='gray')
+  max_y <- max(0,NBh_all[1:99],NBh_model[1:99])
+  plot(zs[1:99], NBh_all[1:99], col='black', type='l', ylim=c(0,max_y), xlab="Risk threshold", ylab="Net benefit")
+  lines(zs[1:99], zs[1:99]*0, col='black', type='l')
+  lines(zs[1:99], NBh_model[1:99], col='blue', type='l')
+  ci_model <- apply(bs_NBh_model[,1:99],MARGIN = 2,FUN = quantile, c(0.025,0.975))
+  lines(zs[1:99],ci_model[1,], type='l', col='gray')
+  lines(zs[1:99],ci_model[2,], type='l', col='gray')
 ```
 
 
-Values of decision at threshold values of interest:
+
+### Difference in NB and 95%CI
 ```{R}
-NBh_model[which(zs %in% settings$zs)]
-NBh_all[which(zs %in% settings$zs)]
+quantile(bs_NBh_model[,main_index]-bs_NBh_all[,main_index],c(0.025,0.975))
+sum(bs_NBh_model[,main_index]-bs_NBh_all[,main_index]>0)/length(bs_NBh_model[,main_index])
+hist(bs_NBh_model[,main_index]-bs_NBh_all[,main_index], xlab="Incremental NB", ylab="Density", main="")
 ```
 
-Incremental NB of the model at these thresholds
+
+### Values of decision at threshold values of interest:
 ```{R}
-NBh_model[which(zs %in% settings$zs)] - pmax(NBh_all[which(zs %in% settings$zs)],0)
+rbind(z=settings$zs,NB_model=NBh_model[-(1:99)],NB_all=NBh_all[-(1:99)],INB=NBh_model[-(1:99)]-NBh_all[-(1:99)])
 ```
 
 
@@ -122,7 +137,7 @@ NBh_model[which(zs %in% settings$zs)] - pmax(NBh_all[which(zs %in% settings$zs)]
 ```{R}
   res_bb <- voi_ex_glm(model,val_data,method='bootstrap',Bayesian_bootstrap = T, zs = zs)
   
-  plot(zs,res_bb$EVPIv,type='l', col='blue', xlim=c(0,settings$max_x_evpi_plot), ylim=c(0,max(res_bb$EVPIv[which(zs<=settings$max_x_evpi_plot)])))
+  plot(zs[1:99],res_bb$EVPIv[1:99],type='l', xlim=c(0,settings$max_x_evpi_plot), ylim=c(0,max(res_bb$EVPIv[which(zs<=settings$max_x_evpi_plot)])),col='red', lwd=2)
 ```
 
 
@@ -130,15 +145,14 @@ NBh_model[which(zs %in% settings$zs)] - pmax(NBh_all[which(zs %in% settings$zs)]
 ```{R}
   res_ob <- voi_ex_glm(model,val_data,method='bootstrap',Bayesian_bootstrap = F,zs = zs)
   
-  plot(zs,res_ob$EVPIv,type='l', col='blue', xlim=c(0,settings$max_x_evpi_plot), ylim=c(0,max(res_ob$EVPIv[which(zs<=settings$max_x_evpi_plot)])))
+  plot(zs[1:99],res_ob$EVPIv[1:99],type='l', xlim=c(0,settings$max_x_evpi_plot), ylim=c(0,max(res_ob$EVPIv[which(zs<=settings$max_x_evpi_plot)])),col='blue', lwd=2)
 ```
 
 
 ###  Asymptotic approach
 ```{R}
   res_as <- voi_ex_glm(model,val_data,method='asymptotic',zs = zs)
-  plot(zs,res_as$EVPIv,type='l', col='blue', xlim=c(0,settings$max_x_evpi_plot), ylim=c(0,max(res_as$EVPIv[which(zs<=settings$max_x_evpi_plot)])))
-  lines(rep(min(val_data$pi),2),c(0,1))
+  plot(zs[1:99],res_as$EVPIv[1:99],type='l', xlim=c(0,settings$max_x_evpi_plot), ylim=c(0,max(res_as$EVPIv[which(zs<=settings$max_x_evpi_plot)])),col='orange', lwd=2)
 ```
 
 
@@ -153,22 +167,17 @@ NBh_model[which(zs %in% settings$zs)] - pmax(NBh_all[which(zs %in% settings$zs)]
 ### Combined graph for EVPIv
 ```{r}
 max_y <- max(c(res_bb$EVPIv[zs<=settings$max_x_evpi_plot],res_ob$EVPIv[zs<=settings$max_x_evpi_plot],res_as$EVPIv[zs<=settings$max_x_evpi_plot]))
-plot(zs,res_bb$EVPIv,type='l', col='black',xlim=c(0,settings$max_x_evpi_plot), ylim=c(0,max_y), main = "EVPIv")
-lines(zs,res_ob$EVPIv,type='l', col='green')
+plot(zs[1:99],res_bb$EVPIv[1:99],type='l', col='red',xlim=c(0,settings$max_x_evpi_plot), lwd=2, ylim=c(0,max_y), xlab="Risk threshold", ylab="EVPI")
+lines(zs[1:99],res_ob$EVPIv[1:99],type='l', col='blue', lwd=2)
 #lines(zs,res_mb$EVPIv,type='l', col='red')
-lines(zs,res_as$EVPIv,type='l', col='orange')
+lines(zs[1:99],res_as$EVPIv[1:99],type='l', col='orange', lwd=2)
 
 ```
 
 
-### At preferred threhsold
+### EVPI at preferred threhsolds
 ```{r}
-res_bb$EVPIv[which(zs %in% settings$zs)]
-res_ob$EVPIv[which(zs %in% settings$zs)]
-#res_mb$EVPIv[which(zs %in% settings$zs)]
-res_as$EVPIv[which(zs %in% settings$zs)]
-
-#EVPId[which(zs %in% settings$zs)]
+rbind(z=settings$zs,EVPIv_bb=res_bb$EVPIv[-(1:99)],EVPIv_ob=res_ob$EVPIv[-(1:99)],EVPIv_as=res_as$EVPIv[-(1:99)])
 ```
 
 

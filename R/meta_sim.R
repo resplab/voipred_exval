@@ -18,7 +18,7 @@ settings <- list(
   model_generator_sigma = diag(2)/4,
   model_generator_sample_size=50,
   universe_n = 10^7,
-  n_sim_outer= 1000,
+  n_sim_outer= 100,
   max_n_sim_inner= 1000,
   verbose = F
 )
@@ -121,7 +121,7 @@ meta_sim <- function(n_sim_outer, max_n_sim_inner, sample_size, universe, method
       }, 
       error=function(e) 
       {
-        message("Error");  browser(); assign("first_term",max(0,parms[1],parms[2]),envir = parent.env(environment()))
+        message("Error");  assign("first_term",max(0,parms[1],parms[2]),envir = parent.env(environment()))
       })
       
       evpi_v[i_sim] <- first_term-max(0,parms[1],parms[2])
@@ -249,11 +249,11 @@ main <- function()
       #  res <- rbind(res,c(method="model_based_ll",sample_size=sample_size,
       #                     as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="model_based_ll"))))
         res <- rbind(res,c(method="BB",sample_size=sample_size,
-                           as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="BB"))))
+                           as.list(meta_sim(n_sim_outer=100, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="BB"))))
         res <- rbind(res,c(method="OB",sample_size=sample_size,
-                           as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="OB"))))
+                           as.list(meta_sim(n_sim_outer=100, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="OB"))))
         res <- rbind(res,c(method="asymptotic",sample_size=sample_size,
-                         as.list(meta_sim(n_sim_outer=1, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="asymptotic"))))
+                         as.list(meta_sim(n_sim_outer=100, max_n_sim_inner=settings$max_n_sim_inner, sample_size=sample_size, universe=universe, method="asymptotic"))))
       
     }
 

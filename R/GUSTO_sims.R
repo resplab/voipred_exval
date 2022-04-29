@@ -8,7 +8,7 @@ set.seed(1)
 
 settings <- list(
   dev_sample_size = Inf,
-  val_sample_size = 1000,
+  val_sample_size = 500,
   zs=c(0.01,0.02,0.05,0.1),
   max_x_evpi_plot = 1   #For plots of evpi 
 )
@@ -91,7 +91,7 @@ sim <- function(n_sim=10)
 
 
 
-sim_by_size <- function(n_sim=1000, sample_sizes=c(250, 500,1000),zs=c(0.01,0.02,0.05,0.1))
+sim_by_size <- function(n_sim=1000, sample_sizes=c(250, 500, 1000, 2000, 4000, 8000, Inf),zs=c(0.01,0.02,0.05,0.1))
 {
   set.seed(1)
   out <- data.frame(method=character(), sample_size=integer())
@@ -169,18 +169,22 @@ sim_by_size <- function(n_sim=1000, sample_sizes=c(250, 500,1000),zs=c(0.01,0.02
 
 pres <- sqldf("SELECT method, sample_size, AVG(val1) AS val1, AVG(val2) AS val2 , AVG(val3) AS val3 , AVG(val4) AS val4 from res GROUP BY method, sample_size")
 
-plot(pres[which(pres$method=="BB"),]$sample_size,pres[which(pres$method=="BB"),]$val1,type='l', xlab = "Sample size", ylab="EVPIv")
-lines(pres[which(pres$method=="OB"),]$sample_size,pres[which(pres$method=="OB"),]$val1,col='green')
-lines(pres[which(pres$method=="asy"),]$sample_size,pres[which(pres$method=="asy"),]$val1,col='orange')
+max_y <- max(pres[which(pres$method=="BB"),]$val1,pres[which(pres$method=="OB"),]$val1,pres[which(pres$method=="asy"),]$val1)
+plot(pres[which(pres$method=="BB"),]$sample_size,pres[which(pres$method=="BB"),]$val1,type='l', xlab = "Sample size", ylab="EVPI", col='red', lwd=2, ylim=c(0,max_y))
+lines(pres[which(pres$method=="OB"),]$sample_size,pres[which(pres$method=="OB"),]$val1,col='blue', lwd=2)
+lines(pres[which(pres$method=="asy"),]$sample_size,pres[which(pres$method=="asy"),]$val1,col='orange', lwd=2)
 
-plot(pres[which(pres$method=="BB"),]$sample_size,pres[which(pres$method=="BB"),]$val2,type='l', xlab = "Sample size", ylab="EVPIv")
-lines(pres[which(pres$method=="OB"),]$sample_size,pres[which(pres$method=="OB"),]$val2,col='green')
-lines(pres[which(pres$method=="asy"),]$sample_size,pres[which(pres$method=="asy"),]$val2,col='orange')
+max_y <- max(pres[which(pres$method=="BB"),]$val2,pres[which(pres$method=="OB"),]$val2,pres[which(pres$method=="asy"),]$val2)
+plot(pres[which(pres$method=="BB"),]$sample_size,pres[which(pres$method=="BB"),]$val2,type='l', xlab = "Sample size", ylab="EVPI", col='red', lwd=2, xlim=c(0,9000), ylim=c(0,max_y))
+lines(pres[which(pres$method=="OB"),]$sample_size,pres[which(pres$method=="OB"),]$val2,col='blue', lwd=2)
+lines(pres[which(pres$method=="asy"),]$sample_size,pres[which(pres$method=="asy"),]$val2,col='orange', lwd=2)
 
-plot(pres[which(pres$method=="BB"),]$sample_size,pres[which(pres$method=="BB"),]$val3,type='l', xlab = "Sample size", ylab="EVPIv")
-lines(pres[which(pres$method=="OB"),]$sample_size,pres[which(pres$method=="OB"),]$val3,col='green')
-lines(pres[which(pres$method=="asy"),]$sample_size,pres[which(pres$method=="asy"),]$val3,col='orange')
+max_y <- max(pres[which(pres$method=="BB"),]$val3,pres[which(pres$method=="OB"),]$val3,pres[which(pres$method=="asy"),]$val3)
+plot(pres[which(pres$method=="BB"),]$sample_size,pres[which(pres$method=="BB"),]$val3,type='l', xlab = "Sample size", ylab="EVPI", col='red', lwd=2, xlim=c(0,3000), ylim=c(0,max_y))
+lines(pres[which(pres$method=="OB"),]$sample_size,pres[which(pres$method=="OB"),]$val3,col='blue', lwd=2)
+lines(pres[which(pres$method=="asy"),]$sample_size,pres[which(pres$method=="asy"),]$val3,col='orange', lwd=2)
 
-plot(pres[which(pres$method=="BB"),]$sample_size,pres[which(pres$method=="BB"),]$val4,type='l', xlab = "Sample size", ylab="EVPIv")
-lines(pres[which(pres$method=="OB"),]$sample_size,pres[which(pres$method=="OB"),]$val4,col='green')
-lines(pres[which(pres$method=="asy"),]$sample_size,pres[which(pres$method=="asy"),]$val4,col='orange')
+max_y <- max(pres[which(pres$method=="BB"),]$val4,pres[which(pres$method=="OB"),]$val4,pres[which(pres$method=="asy"),]$val4)
+plot(pres[which(pres$method=="BB"),]$sample_size,pres[which(pres$method=="BB"),]$val4,type='l', xlab = "Sample size", ylab="EVPI", col='red', lwd=2, xlim=c(0,3000), ylim=c(0,max_y))
+lines(pres[which(pres$method=="OB"),]$sample_size,pres[which(pres$method=="OB"),]$val4,col='blue', lwd=2)
+lines(pres[which(pres$method=="asy"),]$sample_size,pres[which(pres$method=="asy"),]$val4,col='orange', lwd=2)
