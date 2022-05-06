@@ -1,0 +1,52 @@
+---
+title: "simulation_study"
+author: "Tae Yoon Lee"
+date: "05/05/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(mvtnorm)
+source("mu_trunc_BVN_stable.R")
+```
+
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+mu1s <- seq(-5,5,1)
+mu2s <- seq(-5,5,1)
+v1s <- seq(1,5,1)
+v2s <- seq(1,5,1)
+rhos <- seq(-0.9,0.9,by=0.1)
+variables <- expand.grid(mu1s,mu2s,v1s,v2s,rhos)
+i <- 1
+
+mu_max_truncated_bvn_sim <- function(mu1,mu2,sig1sq,sig2sq,rho,n_sim=10^4){
+  sigma <- rbind(
+  c(sig1sq, rho*sqrt(sig1sq*sig2sq)),
+  c(rho*sqrt(sig1sq*sig2sq),sig2sq)
+  )
+  dt <- rmvnorm(n_sim,c(mu1,mu2),sigma)
+  mean(apply(cbind(dt,0),1,max))
+}
+
+out <- lapply(1:nrow(variables),function(i){
+  c(mu_max_truncated_bvn(variables[i,1],variables[i,2],variables[i,3],variables[i,4],variables[i,5]),
+    mu_max_truncated_bvn_sim(variables[i,1],variables[i,2],variables[i,3],variables[i,4],variables[i,5]))
+})
+
+out <- do.call(rbind,out)
+```
+
+```{r}
+plot(out[,1],out[,2],ylab="Monte-Carlo",xlab="Exact")
+abline(0,1,col='red',lwd=2)
+```
+
+```{r}
+boxplot(out[,1]-out[,2])
+```
+
