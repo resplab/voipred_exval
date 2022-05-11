@@ -1,90 +1,100 @@
 library(mvtnorm)
 
 # exact method ------------------------------------------------------------
-mu_max_truncated_bvn <- function(mu1,mu2,sig1sq,sig2sq,rho,exact=T){
-  sig1 <- sqrt(sig1sq)
-  sig2 <- sqrt(sig2sq)
-  f1 <-  function(mu1,mu2,sig1,sig2,rho){
-    tmp1 <- sig1-rho*sig2
-    tmp2 <- (-sig1*mu2+rho*sig2*mu1)/(sig1*sig2*sqrt(1-rho^2))
-    mu1 * ( as.numeric(tmp1>0) +  0*as.numeric(tmp1==0)*pnorm(tmp2) ) - pnorm(tmp2)*(-sig1*dnorm(-mu1/sig1) + mu1*pnorm(-mu1/sig1))
-  }
-  
-  f2 <- function(mu1,mu2,sig1,sig2,rho,exact=T){
-    if(exact){
+mu_max_truncated_bvn <-
+  function(mu1, mu2, sig1sq, sig2sq, rho) {
+    sig1 <- sqrt(sig1sq)
+    sig2 <- sqrt(sig2sq)
+    f1 <-  function(mu1, mu2, sig1, sig2, rho) {
+      tmp1 <- sig1 - rho * sig2
+      tmp2 <-
+        (-sig1 * mu2 + rho * sig2 * mu1) / (sig1 * sig2 * sqrt(1 - rho ^
+                                                                 2))
+      mu1 * (as.numeric(tmp1 > 0) +  0 * as.numeric(tmp1 == 0) * pnorm(tmp2)) -
+        pnorm(tmp2) * (-sig1 * dnorm(-mu1 / sig1) + mu1 * pnorm(-mu1 / sig1))
+    }
+    
+    f2 <- function(mu1, mu2, sig1, sig2, rho) {
+      tmp1 <- (sig1 - rho * sig2)
+      alpha_num <- (sig1 * mu2 - rho * sig2 * mu1)
+      beta_num <- sig1 * sig2 * sqrt(1 - rho ^ 2)
+      alpha <- alpha_num / tmp1
+      beta <- beta_num / tmp1
       
-      tmp1 <- (sig1-rho*sig2)
-      alpha_num <- (sig1*mu2-rho*sig2*mu1)
-      beta_num <- sig1*sig2*sqrt(1-rho^2)
-      alpha <- alpha_num/tmp1
-      beta <- beta_num/tmp1
-      
-      if(tmp1>0){
+      if (tmp1 > 0) {
+        a <- (tmp1 * mu1 - alpha_num) / beta_num
+        b <- tmp1 * sig1 / beta_num
+        T1_rho <- -1 / sqrt(1 + b ^ 2)
         
-        a <- (tmp1*mu1-alpha_num)/beta_num
-        b <- tmp1*sig1/beta_num
-        T1_rho <- -1/sqrt(1+b^2)
-        
-        if(tmp1<1e-10){
-          T1_1 <- pnorm(alpha_num/beta_num)
+        if (tmp1 < 1e-10) {
+          T1_1 <- pnorm(alpha_num / beta_num)
         } else{
-          T1_1 <-  pnorm((-a/b)/sqrt(1+(1/b)^2) )
+          T1_1 <-  pnorm((-a / b) / sqrt(1 + (1 / b) ^ 2))
         }
         
-        T1 <- mu1* (T1_1  - as.numeric(pmvnorm(lower = c(-Inf,-Inf),upper=c(-a/sqrt(1+b^2),-alpha_num/beta_num),
-                                                                          mean=c(0,0),sigma=matrix(c(1,T1_rho,T1_rho,1),2))[[1]]))
-        a <- (alpha-mu1)/sig1 
-        b <- beta/sig1
-        T2_t <- sqrt(1+b^2)
+        T1 <-
+          mu1 * (T1_1  - as.numeric(pmvnorm(
+            lower = c(-Inf,-Inf),
+            upper = c(-a / sqrt(1 + b ^ 2),-alpha_num / beta_num),
+            mean =
+              c(0, 0),
+            sigma = matrix(c(1, T1_rho, T1_rho, 1), 2)
+          )[[1]]))
+        a <- (alpha - mu1) / sig1
+        b <- beta / sig1
+        T2_t <- sqrt(1 + b ^ 2)
         
-        if(tmp1<1e-10){
-          T2 <- -sig1 / b * dnorm(alpha_num/beta_num) * (1-pnorm(-mu1/sig1))
+        if (tmp1 < 1e-10) {
+          T2 <-
+            -sig1 / b * dnorm(alpha_num / beta_num) * (1 - pnorm(-mu1 / sig1))
         } else{
-          T2 <- -sig1 / T2_t * dnorm(a/T2_t) * (1-pnorm(-T2_t*alpha_num/beta_num+a*b/T2_t))
+          T2 <-
+            -sig1 / T2_t * dnorm(a / T2_t) *
+            (1 - pnorm(-T2_t * alpha_num / beta_num + a * b / T2_t))
         }
         
-        return(T1+T2)
-      } else{
-        
+        return(T1 + T2)
+      }
+      else{
         beta <- abs(beta)
         
-        a <- (abs(tmp1)*mu1+alpha_num)/beta_num
-        b <- abs(tmp1)*sig1/beta_num
-        T1_rho <- -1/sqrt(1+b^2)
+        a <- (abs(tmp1) * mu1 + alpha_num) / beta_num
+        b <- abs(tmp1) * sig1 / beta_num
+        T1_rho <- -1 / sqrt(1 + b ^ 2)
         
-        if(abs(tmp1)<1e-10){
-          T1_1 <- pnorm(-alpha_num/beta_num)
+        if (abs(tmp1) < 1e-10) {
+          T1_1 <- pnorm(-alpha_num / beta_num)
         } else{
-          T1_1 <-  pnorm((-a/b)/sqrt(1+(1/b)^2) )
+          T1_1 <-  pnorm((-a / b) / sqrt(1 + (1 / b) ^ 2))
         }
         
-        T1 <- -mu1 * (T1_1  - as.numeric(pmvnorm(lower = c(-Inf,-Inf),upper=c(-a/sqrt(1+b^2),alpha_num/beta_num),
-                                                                           mean=c(0,0),sigma=matrix(c(1,T1_rho,T1_rho,1),2))[[1]]))
+        T1 <-
+          -mu1 * (T1_1  - as.numeric(pmvnorm(
+            lower = c(-Inf,-Inf),
+            upper = c(-a / sqrt(1 + b ^ 2), alpha_num / beta_num),
+            mean =
+              c(0, 0),
+            sigma = matrix(c(1, T1_rho, T1_rho, 1), 2)
+          )[[1]]))
         
-        a <- (alpha-mu1)/sig1 
-        b <- beta/sig1
-        T2_t <- sqrt(1+b^2)
+        a <- (alpha - mu1) / sig1
+        b <- beta / sig1
+        T2_t <- sqrt(1 + b ^ 2)
         
-        if(abs(tmp1)<1e-10){
-          T2 <- sig1 / b * dnorm(-alpha_num/beta_num) * (1-pnorm(-mu1/sig1))
+        if (abs(tmp1) < 1e-10) {
+          T2 <-
+            sig1 / b * dnorm(-alpha_num / beta_num) * (1 - pnorm(-mu1 / sig1))
         } else{
-          T2 <- sig1 / T2_t * dnorm(a/T2_t) * (1-pnorm(T2_t*alpha_num/beta_num+a*b/T2_t))
+          T2 <-
+            sig1 / T2_t * dnorm(a / T2_t) * (1 - pnorm(T2_t * alpha_num / beta_num +
+                                                         a * b / T2_t))
         }
         
-        return(T1+T2)
+        return(T1 + T2)
         
       }
-    } else{
-      
-      tmp1 <- (sig1-rho*sig2)/(sig1*sig2*sqrt(1-rho^2))
-      tmp2 <- (-sig1*mu2+rho*sig2*mu1)/(sig1*sig2*sqrt(1-rho^2))
-      
-      int_LHS <- function(y){
-        (-sig1*dnorm((y-mu1)/sig1)+mu1*pnorm((y-mu1)/sig1))*tmp1*dnorm(y*tmp1+tmp2)
-      }
-      return(integrate(int_LHS,0,Inf,subdivisions=5000L)[[1]])
     }
+    
+    f1(mu1, mu2, sig1, sig2, rho) + f1(mu2, mu1, sig2, sig1, rho) -
+      f2(mu1, mu2, sig1, sig2, rho) - f2(mu2, mu1, sig2, sig1, rho)
   }
-  
-  f1(mu1,mu2,sig1,sig2,rho) + f1(mu2,mu1,sig2,sig1,rho) - f2(mu1,mu2,sig1,sig2,rho,exact) - f2(mu2,mu1,sig2,sig1,rho,exact)
-}
