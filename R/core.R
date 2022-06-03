@@ -1,17 +1,37 @@
+dca <- function(val_data, zs=(0:99)/100, weights=NULL)
+{
+  n <- dim(val_data)[1]
+  
+  NB_model <- NB_all <- rep(0, length(zs))
+  
+  if(is.null(weights)) weights <- rep(1,n)
+    
+  for(j in 1:length(zs))
+  {
+    NB_model[j] <- sum(weights*(val_data$pi>zs[j])*(val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
+    NB_all[j] <- sum(weights*(val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
+  }
+  
+  return(data.frame(z=zs, NB_model=NB_model, NB_all=NB_all))
+}
 
-voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","model_based_bs","asymptotic"), Bayesian_bootstrap=F, n_sim=1000, zs=(0:99)/100)
+
+
+voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","model_based_bs","asymptotic"), Bayesian_bootstrap=F, n_sim=1000, zs=(0:99)/100, weights=NULL)
 {
   n <- dim(val_data)[1]
   
   if(method=="asymptotic")
   {
+    if(is.null(weights)) weights <- rep(1,n)
+        
     ENB_perfect <- ENB_current <- rep(0, length(zs))
     for(j in 1:length(zs))
     {
-      NB_model <- sum((val_data$pi>zs[j])*(val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
-      NB_all <- sum((val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
+      NB_model <- sum(weights*(val_data$pi>zs[j])*(val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
+      NB_all <- sum(weights*(val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
+      parms <- NB_BVN(val_data$Y,val_data$pi,zs[j], weights)
       
-      parms <- NB_BVN(val_data$Y,val_data$pi,zs[j])
       if(parms[5]>0.999999) parms[5]<-0.999999
     
       tryCatch(
@@ -30,7 +50,7 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
   {
     for(i in 1:n_sim)
     {
-      w_x <- voipred:::bootstrap(n, Bayesian_bootstrap)
+      w_x <- bootstrap(n, Bayesian_bootstrap, weights = weights)
       for(j in 1:length(zs))
       {
         NB_model[i,j] <- sum(w_x*(val_data$pi>zs[j])*(val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
@@ -80,15 +100,19 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
     stop("Method ",method," is not recognized.")
   }
   
-  ENB_perfect <- ENB_current <- EVPIv <- rep(NA,length(zs))
+  ENB_model <- ENB_all <- ENB_perfect <- ENB_current <- EVPIv <- p_useful <- rep(NA,length(zs))
   for(i in 1:length(zs))
   {
+    ENB_model[i] <- mean(NB_model[,i])
+    ENB_all[i] <- mean(NB_all[,i])
+                                              
     ENB_perfect[i] <- mean(pmax(NB_model[,i],NB_all[,i],0))
-    ENB_current[i] <- max(mean(NB_model[,i]),mean(NB_all[,i]),0)
+    ENB_current[i] <- max(ENB_model[i],ENB_all[i],0)
     EVPIv[i] <- ENB_perfect[i] - ENB_current[i]
+    p_useful[i] <- mean((pmax(NB_model[,i],NB_all[,i],0)-NB_model[,i])==0)
   }
   
-  data.frame(z=zs, ENB_perfect=ENB_perfect, ENB_current=ENB_current, EVPIv=EVPIv)
+  data.frame(z=zs, ENB_model=ENB_model, ENB_all=ENB_all, ENB_current=ENB_current, ENB_perfect=ENB_perfect, EVPIv=EVPIv, p_useful=p_useful)
 }
 
 
@@ -97,14 +121,23 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
 
 
 
-NB_BVN <- function(y,pi,z){
+NB_BVN <- function(y,pi,z,weights=NULL){
   # set up
   n <- length(y)
   a <- as.numeric(pi>z)
-  rho <- mean(y)
-  TPR <- mean(y*a)/rho
-  FPR <- mean(a*(1-y))/(1-rho)
-  tz <- z/(1-z)
+  if(is.null(weights))
+  {
+    rho <- mean(y)
+    TPR <- mean(y*a)/rho
+    FPR <- mean(a*(1-y))/(1-rho)
+  }
+  else
+  {
+    rho <- weighted.mean(y,w = weights)
+    TPR <- weighted.mean(y*a, w = weights)/rho
+    FPR <- weighted.mean(a*(1-y), w=weights)/(1-rho) 
+  }
+    tz <- z/(1-z)
   
   # mean
   mu <- c(rho*TPR-tz*(1-rho)*FPR,rho-tz*(1-rho))
@@ -126,77 +159,119 @@ NB_BVN <- function(y,pi,z){
 }
 
 
-mu_max_truncated_bvn <- function(mu1,mu2,sig1,sig2,rho,exact=T){
-  sig1 <- sqrt(sig1)
-  sig2 <- sqrt(sig2)
-  f1 <-  function(mu1,mu2,sig1,sig2,rho){
-    tmp1 <- sig1-rho*sig2
-    tmp2 <- (-sig1*mu2+rho*sig2*mu1)/(sig1*sig2*sqrt(1-rho^2))
-    mu1 * ( as.numeric(tmp1>0) +  as.numeric(tmp1==0)*pnorm(tmp2) ) - pnorm(tmp2)*(-sig1*dnorm(-mu1/sig1) + mu1*pnorm(-mu1/sig1))
-  }
-  
-  f2 <- function(mu1,mu2,sig1,sig2,rho,exact=T){
-    if(exact){
+mu_max_truncated_bvn <-
+  function(mu1, mu2, sig1sq, sig2sq, rho) {
+    sig1 <- sqrt(sig1sq)
+    sig2 <- sqrt(sig2sq)
+    f1 <-  function(mu1, mu2, sig1, sig2, rho) {
+      tmp1 <- sig1 - rho * sig2
+      tmp2 <-
+        (-sig1 * mu2 + rho * sig2 * mu1) / (sig1 * sig2 * sqrt(1 - rho ^
+                                                                 2))
+      mu1 * (as.numeric(tmp1 > 0) +  0 * as.numeric(tmp1 == 0) * pnorm(tmp2)) -
+        pnorm(tmp2) * (-sig1 * dnorm(-mu1 / sig1) + mu1 * pnorm(-mu1 / sig1))
+    }
+    
+    f2 <- function(mu1, mu2, sig1, sig2, rho) {
+      tmp1 <- (sig1 - rho * sig2)
+      alpha_num <- (sig1 * mu2 - rho * sig2 * mu1)
+      beta_num <- sig1 * sig2 * sqrt(1 - rho ^ 2)
+      alpha <- alpha_num / tmp1
+      beta <- beta_num / tmp1
       
-      tmp1 <- (sig1-rho*sig2)
-      alpha <- (sig1*mu2-rho*sig2*mu1)/tmp1
-      beta <- sig1*sig2*sqrt(1-rho^2)/tmp1
-      if(beta>0){
-        a <- (mu1-alpha)/beta
-        b <- sig1/beta
-        T1_rho <- -1/sqrt(1+b^2)
-        T1 <- mu1 * (pnorm((-a/b)/sqrt(1+(1/b)^2) )  - as.numeric(pmvnorm(lower = c(-Inf,-Inf),upper=c(-a/sqrt(1+b^2),-alpha/beta),
-                                                                          mean=c(0,0),sigma=matrix(c(1,T1_rho,T1_rho,1),2))[[1]]))
-        a <- (alpha-mu1)/sig1 
-        b <- beta/sig1
-        T2_t <- sqrt(1+b^2)
-        T2 <- -sig1 / T2_t * dnorm(a/T2_t) * (1-pnorm(-T2_t*alpha/beta+a*b/T2_t))
-        return(T1+T2)
-      } else{
+      if (tmp1 > 0) {
+        a <- (tmp1 * mu1 - alpha_num) / beta_num
+        b <- tmp1 * sig1 / beta_num
+        T1_rho <- -1 / sqrt(1 + b ^ 2)
+        
+        if (tmp1 < 1e-10) {
+          T1_1 <- pnorm(alpha_num / beta_num)
+        } else{
+          T1_1 <-  pnorm((-a / b) / sqrt(1 + (1 / b) ^ 2))
+        }
+        
+        T1 <-
+          mu1 * (T1_1  - as.numeric(pmvnorm(
+            lower = c(-Inf,-Inf),
+            upper = c(-a / sqrt(1 + b ^ 2),-alpha_num / beta_num),
+            mean =
+              c(0, 0),
+            sigma = matrix(c(1, T1_rho, T1_rho, 1), 2)
+          )[[1]]))
+        a <- (alpha - mu1) / sig1
+        b <- beta / sig1
+        T2_t <- sqrt(1 + b ^ 2)
+        
+        if (tmp1 < 1e-10) {
+          T2 <-
+            -sig1 / b * dnorm(alpha_num / beta_num) * (1 - pnorm(-mu1 / sig1))
+        } else{
+          T2 <-
+            -sig1 / T2_t * dnorm(a / T2_t) *
+            (1 - pnorm(-T2_t * alpha_num / beta_num + a * b / T2_t))
+        }
+        
+        return(T1 + T2)
+      }
+      else{
         beta <- abs(beta)
-        a <- (mu1-alpha)/beta
-        b <- sig1/beta
-        T1_rho <- -1/sqrt(1+b^2)
-        T1 <- -mu1 * (pnorm((-a/b)/sqrt(1+(1/b)^2) )  - as.numeric(pmvnorm(lower = c(-Inf,-Inf),upper=c(-a/sqrt(1+b^2),-alpha/beta),
-                                                                           mean=c(0,0),sigma=matrix(c(1,T1_rho,T1_rho,1),2))[[1]]))
-        a <- (alpha-mu1)/sig1 
-        b <- beta/sig1
-        T2_t <- sqrt(1+b^2)
-        T2 <- sig1 / T2_t * dnorm(a/T2_t) * (1-pnorm(-T2_t*alpha/beta+a*b/T2_t))
-        return(T1+T2)
+        
+        a <- (abs(tmp1) * mu1 + alpha_num) / beta_num
+        b <- abs(tmp1) * sig1 / beta_num
+        T1_rho <- -1 / sqrt(1 + b ^ 2)
+        
+        if (abs(tmp1) < 1e-10) {
+          T1_1 <- pnorm(-alpha_num / beta_num)
+        } else{
+          T1_1 <-  pnorm((-a / b) / sqrt(1 + (1 / b) ^ 2))
+        }
+        
+        T1 <-
+          -mu1 * (T1_1  - as.numeric(pmvnorm(
+            lower = c(-Inf,-Inf),
+            upper = c(-a / sqrt(1 + b ^ 2), alpha_num / beta_num),
+            mean =
+              c(0, 0),
+            sigma = matrix(c(1, T1_rho, T1_rho, 1), 2)
+          )[[1]]))
+        
+        a <- (alpha - mu1) / sig1
+        b <- beta / sig1
+        T2_t <- sqrt(1 + b ^ 2)
+        
+        if (abs(tmp1) < 1e-10) {
+          T2 <-
+            sig1 / b * dnorm(-alpha_num / beta_num) * (1 - pnorm(-mu1 / sig1))
+        } else{
+          T2 <-
+            sig1 / T2_t * dnorm(a / T2_t) * (1 - pnorm(T2_t * alpha_num / beta_num +
+                                                         a * b / T2_t))
+        }
+        
+        return(T1 + T2)
         
       }
-    } else{
-      
-      tmp1 <- (sig1-rho*sig2)/(sig1*sig2*sqrt(1-rho^2))
-      tmp2 <- (-sig1*mu2+rho*sig2*mu1)/(sig1*sig2*sqrt(1-rho^2))
-      
-      int_LHS <- function(y){
-        (-sig1*dnorm((y-mu1)/sig1)+mu1*pnorm((y-mu1)/sig1))*tmp1*dnorm(y*tmp1+tmp2)
-      }
-      return(integrate(int_LHS,0,Inf,subdivisions=5000L)[[1]])
     }
+    
+    f1(mu1, mu2, sig1, sig2, rho) + f1(mu2, mu1, sig2, sig1, rho) -
+      f2(mu1, mu2, sig1, sig2, rho) - f2(mu2, mu1, sig2, sig1, rho)
   }
-  
-  f1(mu1,mu2,sig1,sig2,rho) + f1(mu2,mu1,sig2,sig1,rho) - f2(mu1,mu2,sig1,sig2,rho,exact) - f2(mu2,mu1,sig2,sig1,rho,exact)
-}
-
 
 
 bootstrap <- function (n, Bayesian=F, weights=NULL)
 {
   if(Bayesian)
   {
-    if(!is.null(weights)) stop("BAyesian bootstrap currently does not work with weighted samples.")
     u <- c(0,sort(runif(n-1)),1)
-    return((u[-1] - u[-length(u)])*n)
+    u <- (u[-1] - u[-length(u)])*n
+    if(!is.null(weights)) u <- u*weights*n/sum(u*weights)
   }
   else
   {
     if(is.null(weights)) weights <-rep(1/n,n)
     u <- rmultinom(1,n,weights)
-    return(u)
   }
+  as.vector(u)
 }
 
 

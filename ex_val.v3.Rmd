@@ -1,7 +1,7 @@
 ---
-title: "Second attempt (From scratch)"
+title: "EVPI for external validation"
 author: "Mohsen Sadatsafavi"
-date: "2022.04.18"
+date: "2022.06.02"
 output: html_document
 editor_options:
   chunk_output_type: console
@@ -19,7 +19,7 @@ source('./R/core.R')
   library(rms)
   library(mvtnorm)
   library(pROC)
-  set.seed(1)
+  set.seed(123) #123 #3344 #123456
 
 
 settings <- list(
@@ -165,13 +165,24 @@ rbind(z=settings$zs,NB_model=NBh_model[-(1:99)],NB_all=NBh_all[-(1:99)],INB=NBh_
 
 
 ### Combined graph for EVPIv
-```{r}
+```{R}
 max_y <- max(c(res_bb$EVPIv[zs<=settings$max_x_evpi_plot],res_ob$EVPIv[zs<=settings$max_x_evpi_plot],res_as$EVPIv[zs<=settings$max_x_evpi_plot]))
 plot(zs[1:99],res_bb$EVPIv[1:99],type='l', col='red',xlim=c(0,settings$max_x_evpi_plot), lwd=2, ylim=c(0,max_y), xlab="Risk threshold", ylab="EVPI")
 lines(zs[1:99],res_ob$EVPIv[1:99],type='l', col='blue', lwd=2)
 #lines(zs,res_mb$EVPIv,type='l', col='red')
 lines(zs[1:99],res_as$EVPIv[1:99],type='l', col='orange', lwd=2)
 
+```
+
+
+### P(useful)
+```{R}
+max_y <- max(c(res_bb$p_useful[zs<=settings$max_x_evpi_plot],res_ob$p_useful[zs<=settings$max_x_evpi_plot],res_as$p_useful[zs<=settings$max_x_evpi_plot]))
+plot(zs[1:99],res_bb$p_useful[1:99],type='l', col='red',xlim=c(0,settings$max_x_evpi_plot), lwd=2, ylim=c(0,max_y), xlab="Risk threshold", ylab="P(useful)")
+lines(zs[1:99],res_ob$p_useful[1:99],type='l', col='blue', lwd=2)
+#lines(zs,res_mb$EVPIv,type='l', col='red')
+#lines(zs[1:99],res_as$p_useful[1:99],type='l', col='orange', lwd=2)
+rbind(z=settings$zs,p_useful_bb=res_bb$p_useful[-(1:99)],p_useful_bb=res_ob$p_useful[-(1:99)])
 ```
 
 

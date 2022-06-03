@@ -14,7 +14,7 @@ if(exists("instanceId")) #Means GRcomp is loaded!
 settings <- list(
   true_model = c(-2,1),  #as.matrix(c(-2,1,0,1,0)),
   z = 0.1,
-  sample_sizes= c(500,1000,2000,4000,8000),
+  sample_sizes= c(125, 250, 500, 1000, 2000, 4000),
   model_generator_sigma = diag(2)/4,
   model_generator_sample_size=50,
   universe_n = 10^7,
@@ -285,13 +285,16 @@ process_results <- function()
   # plot(llv$sample_size, llv$meta, type='l', ylim=c(0,max(llv$val)), col='red', main="llv")
   # lines(llv$sample_size, llv$val, type='l',col='blue')
   # 
-  plot(BB$sample_size, BB$meta, type='l',col='red', ylim=c(0,max(BB$val)), main="Bayesian bootstrap", xlab="Sample size", ylab="EVPIv")
+  max_y <- max(max(BB$val),max(BB$meta))
+  plot(BB$sample_size, BB$meta, type='l',col='red', ylim=c(0,max_y), main="Bayesian bootstrap", xlab="Sample size", ylab="EVPIv")
   lines(BB$sample_size, BB$val, type='l',col='blue')
-   
-  plot(OB$sample_size, OB$meta, type='l',col='red', ylim=c(0,max(OB$val)), main="Ordinary bootstrap", xlab="Sample size", ylab="EVPIv")
+  
+  max_y <- max(max(OB$val),max(OB$meta))
+  plot(OB$sample_size, OB$meta, type='l',col='red', ylim=c(0,max_y), main="Ordinary bootstrap", xlab="Sample size", ylab="EVPIv")
   lines(OB$sample_size, OB$val, type='l',col='blue')
   
-  plot(asy$sample_size, asy$meta, type='l',col='red', ylim=c(0,max(asy$val)), main="Asymptotic", xlab="Sample size", ylab="EVPIv")
+  max_y <- max(max(asy$val),max(asy$meta))
+  plot(asy$sample_size, asy$meta, type='l',col='red', ylim=c(0,max_y), main="Asymptotic", xlab="Sample size", ylab="EVPIv")
   lines(asy$sample_size, asy$val, type='l',col='blue')
   
 
