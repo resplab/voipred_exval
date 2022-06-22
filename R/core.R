@@ -33,6 +33,7 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
       parms <- NB_BVN(val_data$Y,val_data$pi,zs[j], weights)
       
       if(parms[5]>0.999999) parms[5]<-0.999999
+      if(parms[5]< -0.999999) parms[5]<- -0.999999
     
       tryCatch(
         {ENB_perfect[j] <- do.call(mu_max_truncated_bvn,as.list(parms))}
