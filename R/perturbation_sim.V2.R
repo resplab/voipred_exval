@@ -1,3 +1,5 @@
+#Simple change of intercept and slope, with threshold set at prevalence
+
 library(pROC)
 library(mvtnorm)
 library(sqldf)
