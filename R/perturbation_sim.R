@@ -3,9 +3,9 @@ library(mvtnorm)
 library(sqldf)
 
 
-perturbed_scenario <- function(sample_size,  true_model = c(-2,1), event_p=NA, noise_sd=NA, bias_OR=NA, n_out_sim=200, max_n_inner_sim=1000, zs=0.1, seed=NULL)
+perturbed_scenario <- function(sample_size,  true_model = c(-1.55,0.77), event_p=NA, noise_sd=NA, c_intercept=NA, n_out_sim=200, max_n_inner_sim=1000, zs=0.1, seed=NULL)
 {
-  cat("Doing ", "Sample_size:",sample_size, "event_p:", event_p, "noise_sd:",  noise_sd, "bias_OR:", bias_OR)
+  #cat("Doing ", "Sample_size:",sample_size, "event_p:", event_p, "noise_sd:",  noise_sd, "c_intercept:", c_intercept)
   if(!is.null(seed))  set.seed(seed)
   
   sample <- as.data.frame(rmvnorm(sample_size, true_model*0, diag(length(true_model))))
@@ -24,13 +24,13 @@ perturbed_scenario <- function(sample_size,  true_model = c(-2,1), event_p=NA, n
     weights[controls] <- 1
     weights <- weights / sum(weights) * sample_size
     prev <- weighted.mean(Y,w = weights)
-    message("p(Y) in the sample is ", prev)
+    #message("p(Y) in the sample is ", prev)
   }
   else
   {
     prev <- mean(p)
     weights <- NULL
-    message("p(Y) in the sample is ", mean(Y))
+    #message("p(Y) in the sample is ", mean(Y))
   }
   
   pi <- p
@@ -45,9 +45,9 @@ perturbed_scenario <- function(sample_size,  true_model = c(-2,1), event_p=NA, n
     pi <- as.vector(1/(1+exp(-log_lins)))
   }
   
-  if(!is.na(bias_OR))
+  if(!is.na(c_intercept))
   {
-    log_lins <- log(pi/(1-pi)) + log(bias_OR)
+    log_lins <- log(pi/(1-pi)) - c_intercept
     pi <- as.vector(1/(1+exp(-log_lins)))
   }
   
@@ -55,23 +55,27 @@ perturbed_scenario <- function(sample_size,  true_model = c(-2,1), event_p=NA, n
   #message("AUC is", auc)
   
   sample$pi <- pi; sample$Y <- Y
+  sample$logit_pi <- log(pi/(1-pi))
+  
+  check <- unname(coefficients(glm(Y~logit_pi, data=sample, family=binomial())))
+  
   res <- voi_ex_glm(model=NULL, val_data=sample, method = "bootstrap", zs = zs, weights = weights)
   res2 <- dca(sample, zs=zs)
   
-  c(EVPIv=res[,'EVPIv'], NB_model=res2[,'NB_model'], NB_all=res2[,'NB_all'],  auc=auc, prev=prev)
+  c(EVPIv=res[,'EVPIv'], NB_model=res2[,'NB_model'], NB_all=res2[,'NB_all'],  auc=auc, prev=prev, check_intercept=check[1], check_slope=check[2])
 }
 
 
 
 
 perturbed_scenarios <- function(sample_sizes = c(125, 250, 500, 1000),
-                                 event_ps = c(0.05,0.1,0.25,0.5),
-                                 noise_sds = c(0.25,0.5,0.75,1),
-                                 bias_ORs = c(1,1.5,2.0,2.5,3,3.5,4),
-                                 zs = c(0.05,0.1,0.15,0.20),
+                                 event_ps = NULL,
+                                 noise_sds = c(0,0.15,0.30,0.45,0.60),
+                                 c_intercepts = c(-0.8,-0.4,0,0.4,0.8),
+                                 zs = c(0.1,0.2,0.3),
                                  seed=NULL)
 {
-  out <- NULL #data.frame("sample_size"=integer(),"event_p"=double(), "noise_sd"=double(),"bias_OR"=double(),"voi_1"=double(), "voi_2"=double(),"voi_3"=double(),"voi_4"=double(),  "auc"=double())
+  out <- NULL #data.frame("sample_size"=integer(),"event_p"=double(), "noise_sd"=double(),"c_intercept"=double(),"voi_1"=double(), "voi_2"=double(),"voi_3"=double(),"voi_4"=double(),  "auc"=double())
   for(sample_size in sample_sizes)
   {
     if(length(event_ps)>0)
@@ -90,17 +94,17 @@ perturbed_scenarios <- function(sample_sizes = c(125, 250, 500, 1000),
         out <- rbind(out,c(sample_size, NA, noise_sd, NA, res))
       }
     }
-    if(length(bias_ORs)>0)
+    if(length(c_intercepts)>0)
     {
-      for(bias_OR in bias_ORs)
+      for(c_intercept in c_intercepts)
       {
-        res <- perturbed_scenario(sample_size, bias_OR = bias_OR, zs = zs, seed=seed)
-        out <- rbind(out,c(sample_size, NA, NA, bias_OR, res))
+        res <- perturbed_scenario(sample_size, c_intercept = c_intercept, zs = zs, seed=seed)
+        out <- rbind(out,c(sample_size, NA, NA, c_intercept, res))
       }
     }
   }
   
-  colnames(out) <- c("sample_size","event_p", "noise_sd","bias_OR", names(res))
+  colnames(out) <- c("sample_size","event_p", "noise_sd","c_intercept", names(res))
   
   out
 }
@@ -113,11 +117,11 @@ main <- function(n_sim=10)
   out <- NULL
   for(i in 1:n_sim)
   {
+    cat(i,"\n")
     out <- rbind(out,perturbed_scenarios(seed=i))
   }
   
   out <- as.data.frame(out)
-  
   res <<- out 
   
   out
@@ -127,12 +131,14 @@ main <- function(n_sim=10)
 
 process_results <- function()
 {
-  x<-sqldf("SELECT COUNT(*) AS N, sample_size, event_p, noise_sd, bias_OR, 
-        AVG(EVPIv1) AS EVPIv1, AVG(EVPIv2) AS EVPIv2, AVG(EVPIv3) AS EVPIv3, AVG(EVPIv4) AS EVPIv4, 
-        AVG(NB_model1) AS NB_model1, AVG(NB_model2) AS NB_model2, AVG(NB_model3) AS NB_model3, AVG(NB_model4) AS NB_model4,
-        AVG(NB_all1) AS NB_all1, AVG(NB_all2) AS NB_all2, AVG(NB_all3) AS NB_all3, AVG(NB_all4) AS NB_all4,
-        AVG(auc) AS auc, AVG(prev) AS prev
-        FROM res GROUP BY sample_size, event_p, noise_sd, bias_OR")
+  x<-sqldf("SELECT COUNT(*) AS N, sample_size, event_p, noise_sd, c_intercept, 
+        AVG(EVPIv1) AS EVPIv1, AVG(EVPIv2) AS EVPIv2, AVG(EVPIv3) AS EVPIv3, 
+        SQRT(VARIANCE(EVPIv1)) AS se1, SQRT(VARIANCE(EVPIv2)) AS se2, SQRT(VARIANCE(EVPIv3)) AS se3, 
+        AVG(NB_model1) AS NB_model1, AVG(NB_model2) AS NB_model2, AVG(NB_model3) AS NB_model3, 
+        AVG(NB_all1) AS NB_all1, AVG(NB_all2) AS NB_all2, AVG(NB_all3) AS NB_all3, 
+        AVG(auc) AS auc, AVG(prev) AS prev,
+        AVG(check_intercept) AS check_intercept, AVG(check_slope) AS check_slope
+        FROM res GROUP BY sample_size, event_p, noise_sd, c_intercept")
   
   x
 }
