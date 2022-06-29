@@ -133,7 +133,7 @@ process_results <- function()
 {
   x<-sqldf("SELECT COUNT(*) AS N, sample_size, event_p, noise_sd, c_intercept, 
         AVG(EVPIv1) AS EVPIv1, AVG(EVPIv2) AS EVPIv2, AVG(EVPIv3) AS EVPIv3, 
-        SQRT(VARIANCE(EVPIv1)) AS se1, SQRT(VARIANCE(EVPIv2)) AS se2, SQRT(VARIANCE(EVPIv3)) AS se3, 
+        SQRT(VARIANCE(EVPIv1)/count(*)) AS se1, SQRT(VARIANCE(EVPIv2)/count(*)) AS se2, SQRT(VARIANCE(EVPIv3)/count(*)) AS se3, 
         AVG(NB_model1) AS NB_model1, AVG(NB_model2) AS NB_model2, AVG(NB_model3) AS NB_model3, 
         AVG(NB_all1) AS NB_all1, AVG(NB_all2) AS NB_all2, AVG(NB_all3) AS NB_all3, 
         AVG(auc) AS auc, AVG(prev) AS prev,
