@@ -25,7 +25,7 @@ source('./R/core.R')
 settings <- list(
   dev_sample_size = Inf,
   val_sample_size = 500,
-  n_sim=1000,
+  n_sim=10000,
   Bayesian_bootstrap =T,
   zs=c(0.01,0.05,0.1,0.02),
   max_x_evpi_plot = 0.2   #For plots of evpi 
@@ -123,6 +123,8 @@ pROC::auc(val_data$Y,val_data$pi)
 quantile(bs_NBh_model[,main_index]-bs_NBh_all[,main_index],c(0.025,0.975))
 sum(bs_NBh_model[,main_index]-bs_NBh_all[,main_index]>0)/length(bs_NBh_model[,main_index])
 hist(bs_NBh_model[,main_index]-bs_NBh_all[,main_index], xlab="Incremental NB", ylab="Density", main="")
+
+head(cbind(bs_NBh_model[,main_index],bs_NBh_all[,main_index]))
 ```
 
 
