@@ -31,9 +31,14 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
       NB_model <- sum(weights*(val_data$pi>zs[j])*(val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
       NB_all <- sum(weights*(val_data$Y-(1-val_data$Y)*zs[j]/(1-zs[j])))/n
       parms <- NB_BVN(val_data$Y,val_data$pi,zs[j], weights)
-      
-      if(parms[5]>0.999999) parms[5]<-0.999999
+      # print(paste0(n,"_",zs[j],"_",parms[5]))
+      if(is.na(parms[5])){
+        ENB_current[j] <- max(0,NB_model,NB_all)
+        return(data.frame(z=zs, ENB_perfect=0, ENB_current=ENB_current, EVPIv=0))
+      }
+      if(parms[5]>0.999999) parms[5]<- 0.999999
       if(parms[5]< -0.999999) parms[5]<- -0.999999
+  
     
       tryCatch(
         {ENB_perfect[j] <- do.call(mu_max_truncated_bvn,as.list(parms))}

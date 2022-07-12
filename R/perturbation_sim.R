@@ -73,7 +73,7 @@ perturbed_scenario <- function(sample_size,  true_model = c(-1.55,0.77), event_p
 
 
 
-perturbed_scenarios <- function(sample_sizes = c(125, 250, 500, 1000),
+perturbed_scenarios <- function(sample_sizes = c(125, 250, 500, 1000,2000),
                                  event_ps = NULL,
                                  noise_sds = c(0,0.15,0.30,0.45,0.60),
                                  c_intercepts = c(-3.2, -1.6, -0.8, -0.4, 0, 0.4, 0.8, 1.6, 3.2),
@@ -125,6 +125,7 @@ main <- function(n_sim=10)
     cat(i,"\n")
     out <- rbind(out,perturbed_scenarios(seed=i))
   }
+  stopCluster(cl)
   
   out <- as.data.frame(out)
   res <<- out 
