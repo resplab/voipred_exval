@@ -50,10 +50,13 @@ process_results <- function()
   x
 }
 
-res <- main(n=100)
-write_rds(res,'perturb_sim_results.rds')
-processed_res <- process_results()
+# res <- main(n=100)
+# write_rds(res,'perturb_sim_results.rds')
 
+res <- read_rds("perturb_sim_results.rds") %>% 
+  filter(sample_size>=200)
+
+processed_res <- process_results()
 
 types <- c("ob",'bb','as')
 
