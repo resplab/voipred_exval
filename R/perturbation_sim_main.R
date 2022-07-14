@@ -80,14 +80,15 @@ df_sample_size <- processed_res %>%
 
 df_sample_size <- tidy_df(df_sample_size,types,index=1)
 
-
+fig.size <- 1.3
+alpha.size <- 0.7
 ggplot(data=df_sample_size %>% 
          mutate(type = case_when(type=='as' ~'Asymptotic',
                                  type == 'bb' ~ "Bayesian",
                                  type == 'ob' ~ "Ordinary")),
        aes(y=EVPI,x=sample_size,colour=type))+
   
-  geom_line(alpha=0.8)+
+  geom_line(alpha=alpha.size,size=fig.size)+
   geom_point()+
   theme_classic() +
   facet_grid(.~threshold) +
@@ -110,7 +111,7 @@ ggplot(data=df_int %>%
                                  type == 'ob' ~ "Ordinary")) %>% 
          mutate(sample_size=as.factor(sample_size)),
        aes(y=EVPI,x=intercept,color=sample_size))+
-  geom_line()+
+  geom_line(alpha=alpha.size,size=2)+
   geom_point()+
   theme_classic() +
   facet_grid(threshold~type) +
@@ -134,7 +135,7 @@ ggplot(data=df_slope %>%
                                  type == 'ob' ~ "Ordinary")) %>% 
          mutate(sample_size=as.factor(sample_size)),
        aes(y=EVPI,x=slope,color=sample_size))+
-  geom_line()+
+  geom_line(alpha=alpha.size,size=2)+
   geom_point()+
   theme_classic() +
   facet_grid(threshold~type) +
