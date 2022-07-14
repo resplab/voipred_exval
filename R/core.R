@@ -33,9 +33,9 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
       parms <- NB_BVN(val_data$Y,val_data$pi,zs[j], weights)
       # print(paste0(n,"_",zs[j],"_",parms[5]))
       if(is.na(parms[5])){
-        ENB_current[j] <- max(0,NB_model,NB_all)
-        return(data.frame(z=zs, ENB_perfect=0, ENB_current=ENB_current, EVPIv=0))
-      }
+        ENB_perfect[j] <- ENB_current[j] <- max(0,NB_model,NB_all)
+        
+        } else{
       if(parms[5]>0.999999) parms[5]<- 0.999999
       if(parms[5]< -0.999999) parms[5]<- -0.999999
   
@@ -46,6 +46,7 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
         return(NULL)
       })
       ENB_current[j] <- max(0,NB_model,NB_all)
+        }
     }
     return(data.frame(z=zs, ENB_perfect=ENB_perfect, ENB_current=ENB_current, EVPIv=ENB_perfect-ENB_current))
   }
