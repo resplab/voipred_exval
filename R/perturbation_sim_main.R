@@ -82,15 +82,17 @@ df_sample_size <- tidy_df(df_sample_size,types,index=1)
 
 fig.size <- 1.3
 alpha.size <- 0.7
+
 ggplot(data=df_sample_size %>% 
          mutate(type = case_when(type=='as' ~'Asymptotic',
                                  type == 'bb' ~ "Bayesian",
-                                 type == 'ob' ~ "Ordinary")),
+                                 type == 'ob' ~ "Ordinary")) %>% 
+       mutate(type=factor(type,c("Bayesian","Ordinary","Asymptotic"))),
        aes(y=EVPI,x=sample_size,colour=type))+
-  
   geom_line(alpha=alpha.size,size=fig.size)+
   geom_point()+
   theme_classic() +
+  scale_color_manual(values=c('red','blue','orange'))+
   facet_grid(.~threshold) +
   xlab("Sample size") +
   ylab("EVPI") +
@@ -109,6 +111,8 @@ ggplot(data=df_int %>%
          mutate(type = case_when(type=='as' ~'Asymptotic',
                                  type == 'bb' ~ "Bayesian",
                                  type == 'ob' ~ "Ordinary")) %>% 
+         mutate(type=factor(type,c("Bayesian","Ordinary","Asymptotic"))) %>% 
+         filter(abs(intercept)<3.2) %>% 
          mutate(sample_size=as.factor(sample_size)),
        aes(y=EVPI,x=intercept,color=sample_size))+
   geom_line(alpha=alpha.size,size=2)+
@@ -133,15 +137,57 @@ ggplot(data=df_slope %>%
          mutate(type = case_when(type=='as' ~'Asymptotic',
                                  type == 'bb' ~ "Bayesian",
                                  type == 'ob' ~ "Ordinary")) %>% 
+         mutate(type=factor(type,c("Bayesian","Ordinary","Asymptotic"))) %>% 
          mutate(sample_size=as.factor(sample_size)),
        aes(y=EVPI,x=slope,color=sample_size))+
   geom_line(alpha=alpha.size,size=2)+
   geom_point()+
   theme_classic() +
   facet_grid(threshold~type) +
-  xlab("Slope") +
+  xlab("SD of added noise") +
   ylab("EVPI") +
   theme(legend.position = 'top',
         legend.title=element_blank(),
         text=element_text(size=18))
+
+library(openxlsx)
+
+wb <- createWorkbook()
+addWorksheet(wb,"results")
+addWorksheet(wb, "sample_size")
+addWorksheet(wb, "intercept")
+addWorksheet(wb, "SD_noise")
+
+writeDataTable(wb,sheet="results",
+               x = processed_res %>% 
+                 as.data.frame() %>%
+                 filter( abs(c_intercept) <3.2  | is.na(c_intercept)))
+
+writeDataTable(wb,sheet="sample_size",
+               x = df_sample_size %>% 
+                 mutate(type = case_when(type=='as' ~'Asymptotic',
+                                         type == 'bb' ~ "Bayesian",
+                                         type == 'ob' ~ "Ordinary")) %>% 
+                 mutate(type=factor(type,c("Bayesian","Ordinary","Asymptotic"))))
+
+writeDataTable(wb,sheet="intercept",
+               x = df_int %>% 
+                 rename(intercept=c_intercept) %>% 
+                 mutate(type = case_when(type=='as' ~'Asymptotic',
+                                         type == 'bb' ~ "Bayesian",
+                                         type == 'ob' ~ "Ordinary")) %>% 
+                 mutate(type=factor(type,c("Bayesian","Ordinary","Asymptotic"))) %>% 
+                 filter(abs(intercept)<3.2))
+
+writeDataTable(wb,sheet="SD_noise",
+               x = df_slope %>% 
+                 rename(slope=noise_sd) %>% 
+                 mutate(type = case_when(type=='as' ~'Asymptotic',
+                                         type == 'bb' ~ "Bayesian",
+                                         type == 'ob' ~ "Ordinary")) %>% 
+                 mutate(type=factor(type,c("Bayesian","Ordinary","Asymptotic"))))
+
+saveWorkbook(wb,"perturb_sim_results.xlsx",overwrite = T)
+
+
 
