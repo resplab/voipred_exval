@@ -1,6 +1,0 @@
-Data generating model:
-logit(P(Y=1))=intercept + slope*X
-"X~N(0,1)"
-
-
-Prediction model is the same as the data generating model

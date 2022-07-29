@@ -66,42 +66,6 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
       #if(i%%100 ==0) {plot(zs,NB_model[i,]); lines(zs,NB_all[i,])}
     }
   }
-  else if(method=="model_based_ll")
-  {
-    local_model <-suppressWarnings(glm(formula=model$call$formula, data=val_data, family=binomial(link="logit")))
-    mus <- as.vector(coefficients(local_model))
-    covmat <- vcov(local_model)
-    for(i in 1:n_sim)
-    {
-      w_x <- voipred:::bootstrap(n, Bayesian_bootstrap)
-      betas <- rmvnorm(1,mus,covmat)
-      p <- as.vector(1/(1+exp(-(model.matrix(model, data=val_data)%*%t(betas)))))
-      for(j in 1:length(zs))
-      {
-        NB_model[i,j] <- sum(w_x*(val_data$pi>zs[j])*(p-(1-p)*zs[j]/(1-zs[j])))/n
-        NB_all[i,j] <- sum(w_x*(p-(1-p)*zs[j]/(1-zs[j])))/n
-      }
-      #if(i%%100 ==0) {plot(zs,NB_model[i,]); lines(zs,NB_all[i,])}
-    }
-  }
-  else if(method=="model_based_bs")
-  {
-    for(i in 1:n_sim)
-    {
-      w_x <- voipred:::bootstrap(n, Bayesian_bootstrap)
-      val_data$w_y <- voipred:::bootstrap(n, Bayesian_bootstrap)
-      local_model <-suppressWarnings(glm(formula=model$call$formula, data=val_data, family=binomial(link="logit"), weights = w_y))
-      p <- predict(local_model, type="response", newdata = val_data)
-      #betas <- as.vector(coefficients(local_model))
-      #p <- as.vector(1/(1+exp(-(model.matrix(model, data=val_data)%*%(betas)))))
-      for(j in 1:length(zs))
-      {
-        NB_model[i,j] <- sum(w_x*(val_data$pi>zs[j])*(p-(1-p)*zs[j]/(1-zs[j])))/n
-        NB_all[i,j] <- sum(w_x*(p-(1-p)*zs[j]/(1-zs[j])))/n
-      }
-      #if(i%%100 ==0) {plot(zs,NB_model[i,]); lines(zs,NB_all[i,])}
-    }
-  }
   else
   {
     stop("Method ",method," is not recognized.")

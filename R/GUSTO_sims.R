@@ -37,7 +37,7 @@ if(is.infinite(settings$val_sample_size))
   val_data <- data_us[sample(1:(dim(data_us)[1]),settings$val_sample_size,F),]  #data is for external validation
 }
 
-model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50), data=dev_data, family=binomial(link="logit"))
+model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + pulse, data=dev_data, family=binomial(link="logit"))
 #model <- glm(Y ~ age + miloc + pmi + kill, data=dev_data, family=binomial(link="logit"))
 pi <- predict(model, type="response", newdata=val_data)
 val_data$pi <- pi
@@ -56,19 +56,14 @@ zs <- sort(c(as.vector(quantile(pi,(1:99)/100)),settings$zs))
 
 sim <- function(n_sim=10)
 {
-  set.seed(1)
+  set.seed(123)
   for(i in 1:n_sim)
   {
     cat('.')
     this_data <- data_us[sample(1:(dim(data_us)[1]),settings$val_sample_size,F),]  #data is for external validation
     this_data$pi <- predict(model,newdata = this_data, type='response')
-    #this_model <- glm(Y ~ age + miloc + pmi + kill + pmin(sysbp,100) + lsp(pulse,50), data=this_data, family=binomial(link="logit"))
-    #pi <- predict(this_model, type="response", newdata=this_data)
-    #this_data$pi <- pi
     res_bs <- res_ll <- res_mb <- res_as <- NULL
     tmp_bs <- voi_ex_glm(model, this_data, method="bootstrap", zs = zs)
-    #tmp_ll <- voi_ex_glm(model, this_data, method="model_based_ll", zs = zs)
-    #tmp_mb <- voi_ex_glm(model, this_data, method="model_based_bs", zs = zs)
     tmp_as <- voi_ex_glm(model, this_data, method="asymptotic", zs = zs)
     
     plot(zs,tmp_bs$EVPIv, type='l', xlim=c(0,0.2))
@@ -91,7 +86,7 @@ sim <- function(n_sim=10)
 
 
 
-sim_by_size <- function(n_sim=1000, sample_sizes=c(250, 500, 1000, 2000, 4000, 8000, Inf),zs=c(0.01,0.02,0.05,0.1))
+sim_by_size <- function(n_sim=1000, sample_sizes=c(250, 500, 1000),zs=c(0.01,0.02,0.05,0.1))
 {
   set.seed(1)
   out <- data.frame(method=character(), sample_size=integer())
@@ -146,9 +141,6 @@ sim_by_size <- function(n_sim=1000, sample_sizes=c(250, 500, 1000, 2000, 4000, 8
       if(is.null(tmp)) bad <- T
       out[index,'method'] <- "OB"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
       index <- index+1
-      # tmp <- voi_ex_glm(model, this_data, method="model_based_bs", Bayesian_bootstrap = T, zs = zs)
-      # out[index,'method'] <- "mbbs"; out[index,'sample_size']<-sample_size; out[index,c('val1','val2','val3','val4')] <- tmp$EVPIv
-      # index <- index+1
       
       tmp <- voi_ex_glm(model, this_data, method="asymptotic", zs = zs)
       if(is.null(tmp)) bad <- T
@@ -163,6 +155,8 @@ sim_by_size <- function(n_sim=1000, sample_sizes=c(250, 500, 1000, 2000, 4000, 8
       }
     }
   }
+  
+  res <<- out
   
   out
 }
