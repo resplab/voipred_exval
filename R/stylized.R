@@ -1,6 +1,7 @@
-library(MASS)
 remotes::install_github("resplab/predtools")
-library("predtools")
+library(MASS)
+library(predtools)
+
 data(birthwt)
 
 n <- dim(birthwt)[1]
@@ -9,7 +10,7 @@ z <- 0.2 #This is the risk threshold
 #Our model is logit(pi) = 2 -0.05*age -0.01*lwt
 
 # set seed for reproducibility
-set.seed(2022)
+set.seed(123)
 
 #Step 1: calculate predicted probabilities
 birthwt$pi <- 1/(1+exp(-(2-0.05*birthwt$age-0.01*birthwt$lwt)))  #Predicted risks
@@ -33,23 +34,22 @@ EVPI <- mean(pmax(0,NBmodel,NBall))-max(0,mean(NBmodel),mean(NBall))
 # Asymptotic method
 
 #Step 2: Estimate the moments
-Y <- birthwt$low; pi <- birthwt$pi; a <- I(pi>z); rho <- mean(Y); TPR <- mean(Y*a)/rho; FPR <- mean(a*(1-Y)/(1-rho)); tz <- z/(1-z)
-NBmodel <- mean(a*(Y-(1-Y)*tz))
-NBall <- mean(Y-(1-Y)*tz)
+Y <- birthwt$low; pi <- birthwt$pi; a <- I(pi>z); p0 <- mean(Y); TPR <- mean(Y*a)/p0; FPR <- mean(a*(1-Y)/(1-p0)); tz <- z/(1-z)
 
-Sigma <- matrix(0,nrow=2,ncol=2)
+NB_model <- mean(a*(Y-(1-Y)*tz))
+NB_all <- mean(Y-(1-Y)*tz)
 
-sig_Y <- rho*(1-rho)/n
-sig_TPR <- rho*TPR*(1-rho*TPR)/n
-sig_FPR <- (1-rho)*FPR*(1-(1-rho)*FPR)/n
+var_Y <- p0*(1-p0)/n
+var_TPR <- p0*TPR*(1-p0*TPR)/n
+var_FPR <- (1-p0)*FPR*(1-(1-p0)*FPR)/n
 
-Sigma[1,1] <-  sig_TPR + tz^2 * sig_FPR + 2 * tz * rho * (1-rho) * TPR * FPR / n
-Sigma[2,2] <- (1+tz)^2 * sig_Y
-Sigma[1,2] <- Sigma[2,1] <- sig_Y * (1+tz)* (TPR + tz * FPR)
+sd_model <- sqrt(var_TPR + tz^2 * var_FPR + 2 * tz * p0 * (1-p0) * TPR * FPR / n)
+sd_all <- sqrt((1+tz)^2 * var_Y)
+rho <- var_Y * (1+tz)* (TPR + tz * FPR)/sd_model/sd_all
 
 #Step 3: Calculate E{max⁡{0,NB_model,NB_all } }
-A <- mu_max_trunc_bvn(c(NBmodel,NBall),Sigma)
+A <- mu_max_trunc_bvn(NB_model,NB_all,sd_model,sd_all,rho)
 
 # Step 4: EVPI calculation
-EVPI <- A - max(0,NBmodel,NBall)
+EVPI <- A - max(0,NB_model,NB_all)
 # 0.0007555751
