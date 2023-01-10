@@ -86,7 +86,7 @@ sim <- function(n_sim=10)
 
 
 
-sim_by_size <- function(n_sim=1000, sample_sizes=c(250, 500, 1000),zs=c(0.01,0.02,0.05,0.1))
+sim_by_size <- function(n_sim=100, sample_sizes=c(250, 500, 1000),zs=c(0.01,0.02,0.05,0.1))
 {
   set.seed(1)
   out <- data.frame(method=character(), sample_size=integer())

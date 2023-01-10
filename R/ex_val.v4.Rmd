@@ -28,7 +28,7 @@ settings <- list(
   n_sim=10000,
   Bayesian_bootstrap =T,
   zs=c(0.01,0.05,0.1,0.02),
-  max_x_evpi_plot = 0.49   #For plots of evpi 
+  max_x_evpi_plot = 0.1   #For plots of evpi 
 )
 
   data(gusto)
@@ -114,6 +114,10 @@ pROC::auc(val_data$Y,val_data$pi)
   ci_model <- apply(bs_NBh_model[,1:99],MARGIN = 2,FUN = quantile, c(0.025,0.975))
   lines(zs[1:99],ci_model[1,], type='l', col='gray')
   lines(zs[1:99],ci_model[2,], type='l', col='gray')
+  ci_all <- apply(bs_NBh_all[,1:99],MARGIN = 2,FUN = quantile, c(0.025,0.975))
+  lines(zs[1:99],ci_all[1,], type='l', col='gray')
+  lines(zs[1:99],ci_all[2,], type='l', col='gray')
+  
 ```
 
 
