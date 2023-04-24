@@ -1,4 +1,4 @@
-source('./R/core.R')
+source('core.R')
 library(voipred)
 library(rms)
 library(mvtnorm)

@@ -47,7 +47,7 @@ voi_ex_glm <- function(model, val_data, method=c("bootstrap","model_based_ll","m
       ENB_current[j] <- max(0,NB_model,NB_all)
         }
     }
-    return(data.frame(z=zs, ENB_perfect=ENB_perfect, ENB_current=ENB_current, EVPIv=ENB_perfect-ENB_current))
+    return(data.frame(z=zs, ENB_model=NB_model, ENB_all=NB_all , ENB_perfect=ENB_perfect, ENB_current=ENB_current, EVPIv=ENB_perfect-ENB_current, p_useful=NA))
   }
   
   NB_model <- NB_all <- matrix(0, n_sim, ncol=length(zs))
