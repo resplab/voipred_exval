@@ -108,15 +108,16 @@ pROC::auc(val_data$Y,val_data$pi)
   NBh_model <- colMeans(bs_NBh_model)
   
   max_y <- max(0,NBh_all[1:99],NBh_model[1:99])
-  plot(zs[1:99], NBh_all[1:99], col='black', type='l', ylim=c(0,max_y), xlab="Risk threshold", ylab="Net benefit")
-  lines(zs[1:99], zs[1:99]*0, col='black', type='l')
-  lines(zs[1:99], NBh_model[1:99], col='blue', type='l')
+  plot(zs[1:99], NBh_all[1:99], col='gray', type='l', lwd=2, ylim=c(0,max_y), xlab="Risk threshold", ylab="Net benefit")
+  lines(zs[1:99], zs[1:99]*0, col='gray', type='l', lwd=2)
+  lines(zs[1:99], NBh_model[1:99], col='blue4', type='l', lwd=2)
   ci_model <- apply(bs_NBh_model[,1:99],MARGIN = 2,FUN = quantile, c(0.025,0.975))
-  lines(zs[1:99],ci_model[1,], type='l', col='gray')
-  lines(zs[1:99],ci_model[2,], type='l', col='gray')
+  lines(zs[1:99],ci_model[1,], type='l', col='gray', lt=2)
+  lines(zs[1:99],ci_model[2,], type='l', col='gray', lt=2)
   ci_all <- apply(bs_NBh_all[,1:99],MARGIN = 2,FUN = quantile, c(0.025,0.975))
-  lines(zs[1:99],ci_all[1,], type='l', col='gray')
-  lines(zs[1:99],ci_all[2,], type='l', col='gray')
+  lines(zs[1:99],ci_all[1,], type='l', col='gray', lt=2)
+  lines(zs[1:99],ci_all[2,], type='l', col='gray', lt=2)
+  legend(0.25,0.08, legend=c("Default strategies*","Using the model","95% confidence interval"), lty=c(1,1,2),  col=c("gray","blue4","gray"), lwd=c(2,2,1))
   
 ```
 
@@ -126,7 +127,7 @@ pROC::auc(val_data$Y,val_data$pi)
 ```{R}
 quantile(bs_NBh_model[,main_index]-bs_NBh_all[,main_index],c(0.025,0.975))
 sum(bs_NBh_model[,main_index]-bs_NBh_all[,main_index]>0)/length(bs_NBh_model[,main_index])
-hist(bs_NBh_model[,main_index]-bs_NBh_all[,main_index], xlab="Incremental NB", ylab="Density", main="")
+hist(bs_NBh_model[,main_index]-bs_NBh_all[,main_index], xlab="Incremental NB", ylab="Density", main="", col="darkgoldenrod")
 
 head(cbind(bs_NBh_model[,main_index],bs_NBh_all[,main_index]))
 ```
@@ -145,7 +146,7 @@ zs_evpi <- seq(0,settings$max_x_evpi_plot,by=0.01)
 
 res_bb <- voi_ex_glm(model,val_data,method='bootstrap',Bayesian_bootstrap = T, zs = zs_evpi,
                      n_sim=settings$n_sim)
-plot(zs_evpi,res_bb$EVPIv,type='l',col='red', lwd=2)
+plot(zs_evpi,res_bb$EVPIv,type='l',col='red4', lwd=2)
 ```
 
 
@@ -154,7 +155,7 @@ plot(zs_evpi,res_bb$EVPIv,type='l',col='red', lwd=2)
 res_ob <- voi_ex_glm(model,val_data,method='bootstrap',Bayesian_bootstrap = F,zs = zs_evpi,
                      n_sim=settings$n_sim)
   
-plot(zs_evpi,res_ob$EVPIv,type='l', col='blue', lwd=2)
+plot(zs_evpi,res_ob$EVPIv,type='l', col='blue4', lwd=2)
 ```
 
 
@@ -162,7 +163,7 @@ plot(zs_evpi,res_ob$EVPIv,type='l', col='blue', lwd=2)
 ```{R}
 res_as <- voi_ex_glm(model,val_data,method='asymptotic',zs = zs_evpi,
                      n_sim=settings$n_sim)
-plot(zs_evpi,res_as$EVPIv,type='l',col='orange', lwd=2)
+plot(zs_evpi,res_as$EVPIv,type='l',col='orange4', lwd=2)
 ```
 
 
@@ -177,11 +178,11 @@ plot(zs,res_mb$EVPIv,type='l', col='blue')
 ### Combined graph for EVPIv
 ```{R}
 max_y <- max(c(res_bb$EVPIv,res_ob$EVPIv,res_as$EVPIv))
-plot(zs_evpi,res_bb$EVPIv,type='l', col='red', lwd=2, ylim=c(0,max_y), xlab="Risk threshold", ylab="EVPI")
-lines(zs_evpi,res_ob$EVPIv,type='l', col='blue', lwd=2)
+plot(zs_evpi,res_bb$EVPIv,type='l', col='red4', lwd=2, ylim=c(0,max_y), xlab="Risk threshold", ylab="EVPI")
+lines(zs_evpi,res_ob$EVPIv,type='l', col='blue4', lwd=2, lty=2)
 # lines(zs_evpi,res_mb$EVPIv,type='l', col='red')
-lines(zs_evpi,res_as$EVPIv,type='l', col='orange', lwd=2)
-
+lines(zs_evpi,res_as$EVPIv,type='l', col='orange4', lwd=2, lty=3)
+legend(0.05,5E-04, legend=c("Bayesian bootstrap","Ordinary bootstrap","Asymptotic"), lty=c(1,2,3),  col=c("red4","blue4","orange4"), lwd=c(2,2,2))
 ```
 
 
